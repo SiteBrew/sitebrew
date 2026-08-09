@@ -98,6 +98,24 @@ function normalizeUrl(raw: string): URL | null {
   return url;
 }
 
+/** Fetch robots.txt and report both presence and whether it advertises a sitemap. */
+async function fetchRobots(
+  origin: string,
+  signal: AbortSignal
+): Promise<{ ok: boolean; declaresSitemap: boolean }> {
+  try {
+    const res = await fetch(`${origin}/robots.txt`, {
+      signal,
+      headers: { "User-Agent": "SiteBrewAuditBot/1.0 (+https://sitebrew.co)" },
+    });
+    if (!res.ok) return { ok: false, declaresSitemap: false };
+    const text = (await res.text()).slice(0, 100_000);
+    return { ok: true, declaresSitemap: /^\s*sitemap\s*:/im.test(text) };
+  } catch {
+    return { ok: false, declaresSitemap: false };
+  }
+}
+
 async function headOk(url: string, signal: AbortSignal): Promise<boolean> {
   try {
     const res = await fetch(url, {
@@ -172,8 +190,8 @@ export async function POST(req: NextRequest) {
     const finalUrl = res.url || url.toString();
     const origin = new URL(finalUrl).origin;
 
-    const [robotsTxtOk, sitemapOk, vitals] = await Promise.all([
-      headOk(`${origin}/robots.txt`, controller.signal),
+    const [robots, sitemapOk, vitals] = await Promise.all([
+      fetchRobots(origin, controller.signal),
       headOk(`${origin}/sitemap.xml`, controller.signal),
       vitalsPromise,
     ]);
@@ -183,7 +201,8 @@ export async function POST(req: NextRequest) {
       url: url.toString(),
       finalUrl,
       html,
-      robotsTxtOk,
+      robotsTxtOk: robots.ok,
+      sitemapInRobots: robots.declaresSitemap,
       sitemapOk,
       isHttps: new URL(finalUrl).protocol === "https:",
       vitals,

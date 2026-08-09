@@ -15,12 +15,19 @@ const GRADE_STYLES: Record<string, { ring: string; text: string; bar: string }> 
 
 const gradeStyle = (g: string) => GRADE_STYLES[g] ?? GRADE_STYLES["N/A"];
 
+/*
+ * Copy is calibrated to a deliberately strict scale. Typical small-business
+ * sites land in the 35-55 range, so the low-score language has to read as
+ * "here is the opportunity", not "your site is broken" — the latter is both
+ * inaccurate and a bad first impression.
+ */
 function verdict(score: number) {
-  if (score >= 90) return "Strong foundation — a few refinements would sharpen it.";
-  if (score >= 80) return "Solid, but leaving rankings on the table.";
-  if (score >= 70) return "Middling. Competitors doing this properly will outrank you.";
-  if (score >= 60) return "Underperforming. Several fixable problems are holding it back.";
-  return "Significant issues are actively working against your visibility.";
+  if (score >= 90) return "Exceptional. This is in the top few percent of sites we check.";
+  if (score >= 80) return "Strong. Ahead of nearly every local competitor.";
+  if (score >= 65) return "Above average, with clear room to pull ahead.";
+  if (score >= 50) return "Typical for a small-business site — and that's the opportunity.";
+  if (score >= 35) return "Below par. Several fixable things are limiting your visibility.";
+  return "Significant gaps are working against you in search.";
 }
 
 export default function SeoAuditTool() {
@@ -120,6 +127,10 @@ export default function SeoAuditTool() {
                   {new URL(result.finalUrl).hostname}
                 </p>
                 <p className="mt-1 text-white/80">{verdict(result.overallScore)}</p>
+                <p className="mt-2 text-xs text-white/50">
+                  Scored on a strict scale — most small-business sites land between 35 and 55.
+                  Above 90 is near-perfect.
+                </p>
                 <p className="mt-3 text-sm text-[#f0b87a]">
                   {result.totalIssues === 0
                     ? "No issues detected in our checks."

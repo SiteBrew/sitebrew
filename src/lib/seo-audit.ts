@@ -178,11 +178,15 @@ export interface AuditInput {
   robotsTxtOk: boolean;
   sitemapOk: boolean;
   isHttps: boolean;
+  /** robots.txt contains a Sitemap: directive. */
+  sitemapInRobots?: boolean;
   vitals?: CoreWebVitals | null;
 }
 
 export function runAudit(input: AuditInput): DetailedAuditResult {
   const { html, finalUrl, isHttps, robotsTxtOk, sitemapOk, vitals } = input;
+  const sitemapInRobots = input.sitemapInRobots ?? false;
+  const pageBytes = Buffer.byteLength(html, 'utf8');
   const h = head(html);
   const body = stripTags(html);
   const checks: Array<Check & { category: string }> = [];
@@ -213,7 +217,7 @@ export function runAudit(input: AuditInput): DetailedAuditResult {
 
   /* — Technical — */
   add('technical', 'https', 'Served over HTTPS', isHttps, 'critical',
-    isHttps ? 'Secure.' : 'Not served over HTTPS. A confirmed ranking factor, and Chrome warns visitors.');
+    isHttps ? 'Secure.' : 'Not served over HTTPS. Confirmed ranking factor; Chrome warns visitors.');
 
   const noindex = /noindex/i.test(metaContent(h, 'name', 'robots'));
   add('technical', 'indexable', 'Page is indexable', !noindex, 'critical',
@@ -223,15 +227,27 @@ export function runAudit(input: AuditInput): DetailedAuditResult {
   add('technical', 'viewport', 'Mobile viewport configured', Boolean(viewport), 'critical',
     viewport ? 'Set.' : 'No viewport meta tag. Google indexes mobile-first.');
 
-  const canonical = h.match(/<link[^>]+rel=["']canonical["'][^>]*href=["']([^"']*)["']/i)?.[1];
-  add('technical', 'canonical', 'Canonical URL set', Boolean(canonical), 'warning',
-    canonical ? `Canonical: ${canonical}` : 'No canonical tag — risks duplicate-content dilution.');
+  const canonicals = h.match(/<link[^>]+rel=["']canonical["']/gi) || [];
+  add('technical', 'canonical', 'Exactly one canonical URL', canonicals.length === 1, 'warning',
+    canonicals.length === 1 ? 'Set.' :
+    canonicals.length === 0 ? 'No canonical tag — risks duplicate-content dilution.'
+      : `${canonicals.length} canonical tags — conflicting signals; Google may ignore all of them.`);
 
-  // Absent robots.txt is neutral for most small sites; a sitemap mainly speeds discovery.
-  add('technical', 'sitemap', 'XML sitemap present', sitemapOk, 'minor',
+  add('technical', 'sitemap', 'XML sitemap present', sitemapOk, 'warning',
     sitemapOk ? 'Found.' : 'No sitemap.xml — new pages take longer to be discovered.');
   add('technical', 'robots', 'robots.txt present', robotsTxtOk, 'minor',
-    robotsTxtOk ? 'Found.' : 'No robots.txt. Not harmful, but it is where the sitemap is advertised.');
+    robotsTxtOk ? 'Found.' : 'No robots.txt.');
+  // Most sites that have both never connect them, so crawlers never find the sitemap.
+  add('technical', 'sitemap-in-robots', 'Sitemap advertised in robots.txt', sitemapInRobots, 'minor',
+    sitemapInRobots ? 'Declared.' : 'robots.txt does not reference the sitemap.');
+
+  add('technical', 'favicon', 'Favicon declared',
+    /<link[^>]+rel=["'][^"']*icon[^"']*["']/i.test(h), 'minor',
+    'A declared favicon improves brand recognition in results and tabs.');
+
+  const pageKb = Math.round(pageBytes / 1024);
+  add('technical', 'page-weight', 'Page HTML under 500KB', pageKb <= 500, 'warning',
+    `HTML payload is ${pageKb}KB. Heavy documents slow first render on mobile.`);
 
   /* — Performance (Core Web Vitals) — */
   if (vitals) {
@@ -240,76 +256,112 @@ export function runAudit(input: AuditInput): DetailedAuditResult {
 
     if (typeof lcp === 'number') {
       add('performance', 'lcp', 'Largest Contentful Paint under 2.5s', lcp <= 2.5, 'warning',
-        `LCP is ${lcp.toFixed(2)}s (${note}). Google considers 2.5s or less good.`);
+        `LCP is ${lcp.toFixed(2)}s (${note}). Google's "good" threshold is 2.5s.`);
+      add('performance', 'lcp-excellent', 'LCP under 1.8s (excellent)', lcp <= 1.8, 'minor',
+        `LCP is ${lcp.toFixed(2)}s. Under 1.8s is genuinely fast.`);
     }
     if (typeof cls === 'number') {
       add('performance', 'cls', 'Cumulative Layout Shift under 0.1', cls <= 0.1, 'warning',
-        `CLS is ${cls.toFixed(3)} (${note}). Google considers 0.1 or less good.`);
+        `CLS is ${cls.toFixed(3)} (${note}). Google's "good" threshold is 0.1.`);
     }
     if (typeof inp === 'number') {
       add('performance', 'inp', 'Interaction to Next Paint under 200ms', inp <= 200, 'warning',
-        `INP is ${Math.round(inp)}ms (${note}). Google considers 200ms or less good.`);
+        `INP is ${Math.round(inp)}ms (${note}). Google's "good" threshold is 200ms.`);
     }
     if (typeof vitals.performanceScore === 'number') {
       add('performance', 'perf-score', 'Lighthouse performance score 90+',
         vitals.performanceScore >= 90, 'warning',
-        `Lighthouse performance score: ${vitals.performanceScore}/100.`);
+        `Lighthouse performance: ${vitals.performanceScore}/100.`);
     }
   }
 
   /* — On-page — */
   const title = tagText(h, 'title');
+  const titleLower = title.toLowerCase();
   add('onpage', 'title-exists', 'Title tag present', Boolean(title), 'critical',
     title ? `"${title}"` : 'No title tag.');
   add('onpage', 'title-length', 'Title length within 30–60 characters',
     title.length >= 30 && title.length <= 60, 'warning',
     `Title is ${title.length} characters. Google truncates around 60.`);
+  // Generic titles are extremely common and waste the single strongest on-page signal.
+  const genericTitle = !title || /^(home|welcome|untitled|index|home page|my site|new page)\b/i.test(title.trim());
+  add('onpage', 'title-descriptive', 'Title is descriptive, not generic', !genericTitle, 'warning',
+    genericTitle ? `"${title}" is generic — it should name the service and location.` : 'Descriptive.');
 
   const desc = metaContent(h, 'name', 'description');
-  // Not a direct ranking factor — it drives click-through from the results page.
   add('onpage', 'desc-exists', 'Meta description present', Boolean(desc), 'warning',
     desc ? `"${desc}"` : 'No meta description — Google will invent one from page text.');
   add('onpage', 'desc-length', 'Meta description within 120–160 characters',
-    desc.length >= 120 && desc.length <= 160, 'minor',
+    desc.length >= 120 && desc.length <= 160, 'warning',
     `Description is ${desc.length} characters.`);
 
   const h1Count = countTags(html, 'h1');
   add('onpage', 'h1-single', 'Exactly one H1 heading', h1Count === 1, 'warning',
     `Found ${h1Count} H1 tag(s).`, true);
+  const h1Text = tagText(html, 'h1');
+  add('onpage', 'h1-distinct', 'H1 differs from the title tag',
+    Boolean(h1Text) && h1Text.toLowerCase().trim() !== titleLower.trim(), 'minor',
+    'A duplicated H1 and title wastes a chance to target a second phrase.', true);
+
   const h2Count = countTags(html, 'h2');
-  add('onpage', 'heading-structure', 'Supporting H2 headings present', h2Count >= 2, 'minor',
-    `Found ${h2Count} H2 tag(s).`, true);
+  add('onpage', 'heading-structure', 'At least 3 H2 sections', h2Count >= 3, 'warning',
+    `Found ${h2Count} H2 tag(s). Thin structure limits topical coverage.`, true);
+  // A skipped level (h1 -> h3) breaks the document outline for crawlers and screen readers.
+  const headingSeq = [...html.matchAll(/<h([1-6])[\s>]/gi)].map((m) => Number(m[1]));
+  let skipped = false;
+  for (let i = 1; i < headingSeq.length; i++) {
+    if (headingSeq[i] - headingSeq[i - 1] > 1) { skipped = true; break; }
+  }
+  add('onpage', 'heading-order', 'No skipped heading levels', !skipped, 'minor',
+    skipped ? 'Heading levels jump (e.g. H1 straight to H3).' : 'Hierarchy is sequential.', true);
 
   /* — Content — */
   const words = wordCountRaw;
-  add('content', 'word-count', 'Substantial page content (300+ words)', words >= 300, 'warning',
-    `Approximately ${words} words of visible text.`, true);
+  add('content', 'word-count', 'At least 600 words of content', words >= 600, 'warning',
+    `Approximately ${words} words. Thin pages rarely outrank thorough competitors.`, true);
+  add('content', 'word-count-depth', 'At least 1,000 words (in-depth)', words >= 1000, 'minor',
+    `Approximately ${words} words.`, true);
 
   const imgs = html.match(/<img[^>]*>/gi) || [];
   const imgsWithAlt = imgs.filter((t) => /alt=["'][^"']+["']/i.test(t)).length;
-  const altRatio = imgs.length ? imgsWithAlt / imgs.length : 1;
-  add('content', 'img-alt', 'Images have descriptive alt text', altRatio >= 0.9, 'warning',
+  add('content', 'img-alt', 'Every image has descriptive alt text',
+    imgs.length === 0 || imgsWithAlt === imgs.length, 'warning',
     imgs.length ? `${imgsWithAlt} of ${imgs.length} images have alt text.` : 'No images found.', true);
+  // Legacy JPEG/PNG is one of the most common causes of a poor LCP.
+  const modernImgs = imgs.filter((t) => /\.(webp|avif)/i.test(t)).length;
+  add('content', 'img-format', 'Images use modern formats (WebP/AVIF)',
+    imgs.length === 0 || modernImgs / imgs.length >= 0.5, 'warning',
+    imgs.length ? `${modernImgs} of ${imgs.length} images use WebP or AVIF.` : 'No images found.', true);
+  const sizedImgs = imgs.filter((t) => /width=/i.test(t) && /height=/i.test(t)).length;
+  add('content', 'img-dimensions', 'Images declare width and height',
+    imgs.length === 0 || sizedImgs / imgs.length >= 0.8, 'warning',
+    imgs.length ? `${sizedImgs} of ${imgs.length} images set dimensions. Missing ones cause layout shift.` : 'No images.', true);
 
   const internalLinks = (html.match(/<a[^>]+href=["'](\/|https?:\/\/[^"']*)["']/gi) || []).length;
-  add('content', 'internal-links', 'Internal linking present', internalLinks >= 5, 'minor',
+  add('content', 'internal-links', 'At least 10 links for crawl paths', internalLinks >= 10, 'warning',
     `Found roughly ${internalLinks} links.`, true);
 
   add('content', 'lang', 'Page language declared',
-    /<html[^>]+lang=["'][a-z-]+["']/i.test(html), 'minor',
-    'The <html> tag should declare a lang attribute.');
+    /<html[^>]+lang=["'][a-z-]+["']/i.test(html), 'minor', 'The <html> tag should declare lang.');
+  add('content', 'main-landmark', 'Semantic <main> landmark present',
+    /<main[\s>]/i.test(html), 'minor', 'A <main> landmark helps crawlers isolate primary content.', true);
 
-  /* — Social (click-through only; no direct ranking impact) — */
+  /* — Social (click-through, not ranking) — */
   const ogTitle = metaContent(h, 'property', 'og:title');
   const ogDesc = metaContent(h, 'property', 'og:description');
   const ogImage = metaContent(h, 'property', 'og:image');
+  const ogUrl = metaContent(h, 'property', 'og:url');
   const twCard = metaContent(h, 'name', 'twitter:card');
 
-  add('social', 'og-title', 'Open Graph title set', Boolean(ogTitle), 'minor',
-    ogTitle || 'Missing — shared links show a bare URL.');
+  add('social', 'og-title', 'Open Graph title set', Boolean(ogTitle), 'minor', ogTitle || 'Missing.');
   add('social', 'og-desc', 'Open Graph description set', Boolean(ogDesc), 'minor', ogDesc || 'Missing.');
   add('social', 'og-image', 'Open Graph image set', Boolean(ogImage), 'warning',
-    ogImage || 'Missing — links shared on LinkedIn or Facebook show no preview image.');
+    ogImage || 'Missing — shared links show no preview image.');
+  // Relative og:image URLs silently break on every platform that scrapes them.
+  add('social', 'og-image-absolute', 'Open Graph image uses an absolute URL',
+    !ogImage || /^https?:\/\//i.test(ogImage), 'minor',
+    ogImage && !/^https?:\/\//i.test(ogImage) ? `"${ogImage}" is relative — scrapers cannot resolve it.` : 'Absolute.');
+  add('social', 'og-url', 'Open Graph URL set', Boolean(ogUrl), 'minor', ogUrl || 'Missing.');
   add('social', 'twitter-card', 'Twitter Card configured', Boolean(twCard), 'minor', twCard || 'Missing.');
 
   /* — Structured data — */
@@ -319,12 +371,14 @@ export function runAudit(input: AuditInput): DetailedAuditResult {
 
   let validSchema = false;
   const types: string[] = [];
+  let nodes: Array<Record<string, unknown>> = [];
   for (const b of ldBlocks) {
     try {
       const parsed = JSON.parse(b.replace(/<[^>]+>/g, ''));
       validSchema = true;
-      const nodes = parsed['@graph'] ?? (Array.isArray(parsed) ? parsed : [parsed]);
-      types.push(...nodes.map((n: { '@type'?: string }) => n['@type']).filter(Boolean));
+      const n = parsed['@graph'] ?? (Array.isArray(parsed) ? parsed : [parsed]);
+      nodes = nodes.concat(n);
+      types.push(...n.map((x: { '@type'?: string }) => x['@type']).filter(Boolean));
     } catch {
       /* leave validSchema false */
     }
@@ -333,9 +387,19 @@ export function runAudit(input: AuditInput): DetailedAuditResult {
     ldBlocks.length > 0 && validSchema, 'warning',
     validSchema ? `Types: ${types.join(', ')}` : 'JSON-LD present but failed to parse.');
 
-  const hasLocal = types.some((t) => /LocalBusiness|Organization/i.test(t));
-  add('schema', 'schema-local', 'Business or LocalBusiness markup present', hasLocal, 'warning',
-    hasLocal ? `Found: ${types.join(', ')}` : 'No Organization or LocalBusiness markup.');
+  const bizNode = nodes.find((n) => /LocalBusiness|Organization/i.test(String(n['@type'] ?? '')));
+  add('schema', 'schema-local', 'Business or LocalBusiness markup present', Boolean(bizNode), 'warning',
+    bizNode ? `Found: ${types.join(', ')}` : 'No Organization or LocalBusiness markup.');
+  // Google ignores business markup that lacks the properties it needs.
+  add('schema', 'schema-address', 'Business markup includes a postal address',
+    Boolean(bizNode && bizNode['address']), 'warning',
+    bizNode?.['address'] ? 'Address present.' : 'No address property — Google cannot use this for local results.');
+  add('schema', 'schema-phone', 'Business markup includes a telephone',
+    Boolean(bizNode && (bizNode['telephone'] || bizNode['contactPoint'])), 'minor',
+    bizNode?.['telephone'] ? 'Telephone present.' : 'No telephone property.');
+  add('schema', 'schema-sameas', 'Business markup links social profiles (sameAs)',
+    Boolean(bizNode && Array.isArray(bizNode['sameAs']) && (bizNode['sameAs'] as unknown[]).length > 0), 'minor',
+    'sameAs links help Google connect the site to your verified profiles.');
 
   /* — Score — */
   const categories: CategoryResult[] = CATEGORIES.map((cat) => {
