@@ -58,15 +58,15 @@ export default function SeoAuditTool() {
       <div className="rounded-[2rem] border border-[#1f2e8c]/20 bg-gradient-to-br from-[#1f2e8c] to-[#2d45c4] p-8 md:p-10">
         <div className="max-w-2xl">
           <p className="font-mono text-sm uppercase tracking-widest text-[#f0b87a]">
-            Free Instant Audit
+            Free Instant Health Check
           </p>
           <h2 className="mt-2 font-mono text-3xl text-white md:text-4xl">
-            How healthy is your website&apos;s SEO?
+            How healthy is your website?
           </h2>
           <p className="mt-4 text-white/80">
-            Enter your address and we&apos;ll check it against the same criteria Google uses —
-            crawlability, on-page structure, content, sharing, and structured data. Takes about
-            ten seconds. No email required.
+            Enter your address and we&apos;ll run live checks on your technical setup,
+            on-page structure, and Google&apos;s Core Web Vitals — the page-experience signals
+            Google confirms it ranks on. No email required.
           </p>
         </div>
 
@@ -90,7 +90,7 @@ export default function SeoAuditTool() {
             disabled={loading || !url.trim()}
             className="rounded-full bg-gradient-to-br from-[#f0b87a] to-[#c8904e] px-8 py-4 font-semibold text-[#1a130e] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading ? "Analysing…" : "Run Free Audit"}
+            {loading ? "Analysing…" : "Check My Site"}
           </button>
         </form>
 
@@ -130,6 +130,48 @@ export default function SeoAuditTool() {
                 </p>
               </div>
             </div>
+
+            {/* Core Web Vitals — real numbers, shown plainly */}
+            {result.vitals && (
+              <div className="mt-4 rounded-2xl border border-white/20 bg-white/10 p-5 backdrop-blur">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h3 className="font-semibold text-white">Core Web Vitals</h3>
+                  <span className="text-xs text-white/60">
+                    {result.vitals.source === "field"
+                      ? "Real Chrome user data (last 28 days)"
+                      : "Lab simulation \u2014 not enough traffic for real-user data"}
+                  </span>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {[
+                    { label: "LCP", value: result.vitals.lcp, unit: "s", good: 2.5, fmt: (v: number) => v.toFixed(2) },
+                    { label: "CLS", value: result.vitals.cls, unit: "", good: 0.1, fmt: (v: number) => v.toFixed(3) },
+                    {
+                      label: result.vitals.source === "field" ? "INP" : "TBT",
+                      value: result.vitals.inp,
+                      unit: "ms",
+                      good: result.vitals.source === "field" ? 200 : 200,
+                      fmt: (v: number) => String(Math.round(v)),
+                    },
+                    { label: "Perf", value: result.vitals.performanceScore, unit: "/100", good: undefined, fmt: (v: number) => String(Math.round(v)) },
+                  ]
+                    .filter((m) => typeof m.value === "number")
+                    .map((m) => {
+                      const v = m.value as number;
+                      const ok = m.good === undefined ? v >= 90 : v <= m.good;
+                      return (
+                        <div key={m.label} className="rounded-xl bg-white/10 p-3 text-center">
+                          <div className="text-xs uppercase tracking-wider text-white/60">{m.label}</div>
+                          <div className={`mt-1 font-mono text-lg font-bold ${ok ? "text-[#7aecd4]" : "text-[#f0b87a]"}`}>
+                            {m.fmt(v)}
+                            <span className="text-xs font-normal text-white/50">{m.unit}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
 
             {/* Categories */}
             <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -188,15 +230,28 @@ export default function SeoAuditTool() {
               </p>
             )}
 
+            {/* Scope caveat — naming the gaps is what makes the CTA credible */}
+            <div className="mt-4 rounded-2xl border border-white/15 bg-white/5 px-5 py-4">
+              <p className="text-xs leading-relaxed text-white/70">
+                <span className="font-semibold text-white/85">What this covers:</span> technical
+                setup, on-page structure, and Core Web Vitals for this page. It does{" "}
+                <span className="font-semibold text-white/85">not</span> measure backlinks, domain
+                authority, your Google Business Profile, keyword relevance, or where you currently
+                rank &mdash; and for local search those often matter more than everything above.
+                We cover them in the full audit.
+              </p>
+            </div>
+
             {/* CTA */}
             <div className="mt-6 rounded-2xl border border-[#f0b87a]/40 bg-[#f5f1e8] p-6 md:p-8">
               <h3 className="font-mono text-xl text-[#1a130e] md:text-2xl">
                 Want to know exactly what&apos;s holding it back?
               </h3>
               <p className="mt-3 text-[#4f4036]">
-                This is the summary. The full report names every issue, ranks them by impact on
-                your rankings, and lays out what it takes to fix each one. We&apos;ll walk you
-                through it and quote the work — no obligation.
+                This is the summary. The full audit names every issue found here, ranks them by
+                real ranking impact, and adds the things this check can&apos;t see &mdash; your
+                backlink profile, Google Business Profile, and how you rank against local
+                competitors. We&apos;ll walk you through it and quote the work &mdash; no obligation.
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
