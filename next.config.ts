@@ -17,7 +17,11 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  outputFileTracingRoot: path.resolve(__dirname, '../../'),
+  // NOTE: previously `path.resolve(__dirname, '../../')`, which suited the
+  // Orchids build layout where the project sat two directories deep. On Vercel
+  // the project is the root, so that resolved above it and Next looked for
+  // .next at /vercel/path0/vercel/path0. Default (project root) is correct here.
+  outputFileTracingRoot: __dirname,
   typescript: {
     ignoreBuildErrors: true,
   },
