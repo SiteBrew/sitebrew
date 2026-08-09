@@ -124,6 +124,13 @@ const countTags = (html: string, tag: string) =>
 /* ── Categories ───────────────────────────────────────────────────────────── */
 
 /*
+ * Technical basics (HTTPS, viewport, canonical, sitemap) are set automatically
+ * by Squarespace, Wix, Shopify and every modern WordPress theme. Weighting them
+ * heavily scores the hosting platform, not the site: a tattoo studio whose title
+ * tag was the four letters "HCTC" and whose meta description was empty still
+ * banked a full 25 points there. They're now 14, with the weight moved to
+ * on-page and content where real work shows.
+ *
  * Category weights drive the overall score. Scoring the raw check list instead
  * lets whichever category happens to contain the most checks dominate: with six
  * social/schema checks and three performance checks, a site failing every Core
@@ -133,37 +140,37 @@ const countTags = (html: string, tag: string) =>
 const CATEGORIES = [
   {
     key: 'technical',
-    weight: 25,
+    weight: 14,
     label: 'Technical Foundation',
     blurb: 'Whether search engines can reach, crawl, and index the page.',
   },
   {
     key: 'performance',
-    weight: 20,
+    weight: 18,
     label: 'Speed & Core Web Vitals',
     blurb: 'Google’s confirmed page-experience ranking signals.',
   },
   {
     key: 'onpage',
-    weight: 20,
+    weight: 26,
     label: 'On-Page SEO',
     blurb: 'Titles, descriptions, and heading structure.',
   },
   {
     key: 'content',
-    weight: 15,
+    weight: 22,
     label: 'Content & Accessibility',
     blurb: 'Content depth, image alt text, and internal linking.',
   },
   {
     key: 'social',
-    weight: 8,
+    weight: 4,
     label: 'Social & Sharing',
     blurb: 'How links look when shared. Affects click-through, not rankings.',
   },
   {
     key: 'schema',
-    weight: 12,
+    weight: 16,
     label: 'Structured Data',
     blurb: 'Markup powering rich results and local listings.',
   },
@@ -284,9 +291,24 @@ export function runAudit(input: AuditInput): DetailedAuditResult {
     title.length >= 30 && title.length <= 60, 'warning',
     `Title is ${title.length} characters. Google truncates around 60.`);
   // Generic titles are extremely common and waste the single strongest on-page signal.
-  const genericTitle = !title || /^(home|welcome|untitled|index|home page|my site|new page)\b/i.test(title.trim());
-  add('onpage', 'title-descriptive', 'Title is descriptive, not generic', !genericTitle, 'warning',
-    genericTitle ? `"${title}" is generic — it should name the service and location.` : 'Descriptive.');
+  const siteName = metaContent(h, 'property', 'og:site_name');
+  const domainRoot = (() => {
+    try { return new URL(finalUrl).hostname.replace(/^www\./, '').split('.')[0]; } catch { return ''; }
+  })();
+  const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const titleWords = title.trim().split(/\s+/).filter(Boolean).length;
+  const genericWord = /^(home|welcome|untitled|index|home page|my site|new page)\b/i.test(title.trim());
+  // Brand-only titles ("HCTC", "Miller Plumbing") waste the strongest on-page
+  // signal there is: nobody searches the brand they haven't heard of yet.
+  const brandOnly =
+    Boolean(title) &&
+    (norm(title) === norm(siteName) || norm(title) === domainRoot || titleWords < 3);
+  add('onpage', 'title-descriptive', 'Title names the service, not just the brand',
+    Boolean(title) && !genericWord && !brandOnly, 'warning',
+    !title ? 'No title.'
+      : genericWord ? `"${title}" is a placeholder title.`
+      : brandOnly ? `"${title}" is brand-only (${titleWords} word${titleWords === 1 ? '' : 's'}). It should name the service and location — nobody searches a brand they haven't met yet.`
+      : 'Descriptive.');
 
   const desc = metaContent(h, 'name', 'description');
   add('onpage', 'desc-exists', 'Meta description present', Boolean(desc), 'warning',
@@ -362,6 +384,15 @@ export function runAudit(input: AuditInput): DetailedAuditResult {
     !ogImage || /^https?:\/\//i.test(ogImage), 'minor',
     ogImage && !/^https?:\/\//i.test(ogImage) ? `"${ogImage}" is relative — scrapers cannot resolve it.` : 'Absolute.');
   add('social', 'og-url', 'Open Graph URL set', Boolean(ogUrl), 'minor', ogUrl || 'Missing.');
+  const ogW = parseInt(metaContent(h, 'property', 'og:image:width') || '0', 10);
+  add('social', 'og-image-size', 'Open Graph image is at least 1200px wide',
+    !ogImage || ogW === 0 || ogW >= 1200, 'minor',
+    ogW && ogW < 1200
+      ? `og:image is declared ${ogW}px wide. Under 1200px renders as a small thumbnail instead of a full card.`
+      : 'Sized correctly or not declared.');
+  add('social', 'og-image-https', 'Open Graph image served over HTTPS',
+    !ogImage || !/^http:\/\//i.test(ogImage), 'minor',
+    /^http:\/\//i.test(ogImage) ? 'og:image is served over plain http — some platforms refuse to load it.' : 'Secure.');
   add('social', 'twitter-card', 'Twitter Card configured', Boolean(twCard), 'minor', twCard || 'Missing.');
 
   /* — Structured data — */
