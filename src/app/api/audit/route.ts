@@ -199,6 +199,28 @@ async function headOk(url: string, signal: AbortSignal): Promise<boolean> {
   }
 }
 
+/**
+ * Easter egg: auditing SiteBrew itself.
+ *
+ * Matches the bare domain and any subdomain or path of it, so sitebrew.co,
+ * www.sitebrew.co and https://sitebrew.co/blog all land here. Returns a 200
+ * with an `easterEgg` flag — the UI renders the joke instead of a scorecard.
+ * The real audit never runs, which is the point: this is not a scored result
+ * dressed up as one.
+ */
+function isOurOwnSite(host: string): boolean {
+  const h = host.toLowerCase().replace(/^www\./, "");
+  return h === "sitebrew.co" || h.endsWith(".sitebrew.co");
+}
+
+const SELF_AUDIT_QUIPS = [
+  "Nice try. It's 100/100 — we'd look pretty silly otherwise.",
+  "Bold move auditing the people who built the auditor.",
+  "We check ours before breakfast. It's 100. Next.",
+  "Marking our own homework? Straight A's, obviously.",
+  "You really thought we'd ship this without checking our own site first?",
+];
+
 export async function POST(req: NextRequest) {
   try {
     const { url: rawUrl } = (await req.json()) as { url?: string };
@@ -211,6 +233,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "That doesn't look like a valid public website address." },
         { status: 400 }
+      );
+    }
+
+    // Someone pointed the auditor at us. Have a bit of fun and skip the crawl.
+    if (isOurOwnSite(url.hostname)) {
+      return NextResponse.json(
+        {
+          easterEgg: true,
+          hostname: url.hostname.replace(/^www\./, ""),
+          message: SELF_AUDIT_QUIPS[Math.floor(Math.random() * SELF_AUDIT_QUIPS.length)],
+        },
+        { status: 200 }
       );
     }
 

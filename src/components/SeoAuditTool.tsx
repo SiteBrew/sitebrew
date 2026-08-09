@@ -35,6 +35,7 @@ export default function SeoAuditTool() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SiteAuditResult | null>(null);
+  const [easterEgg, setEasterEgg] = useState<{ hostname: string; message: string } | null>(null);
 
   const runAudit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +43,7 @@ export default function SeoAuditTool() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setEasterEgg(null);
     try {
       const res = await fetch("/api/audit", {
         method: "POST",
@@ -50,6 +52,11 @@ export default function SeoAuditTool() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Audit failed");
+      // Someone pointed the auditor at us.
+      if (data.easterEgg) {
+        setEasterEgg({ hostname: data.hostname, message: data.message });
+        return;
+      }
       setResult(data as SiteAuditResult);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
@@ -113,6 +120,34 @@ export default function SeoAuditTool() {
           <p role="alert" className="mt-4 rounded-2xl bg-white/10 px-5 py-3 text-sm text-[#ffd9d8]">
             {error}
           </p>
+        )}
+
+        {/* Easter egg — auditing SiteBrew itself */}
+        {easterEgg && (
+          <div className="mt-10 flex flex-col items-center gap-6 rounded-2xl border border-[#f0b87a]/40 bg-white/10 p-8 backdrop-blur text-center sm:flex-row sm:text-left">
+            <div className="flex h-28 w-28 flex-none items-center justify-center rounded-full border-4 border-[#f0b87a] bg-white">
+              <div className="leading-none">
+                <div className="font-mono text-4xl font-bold text-[#c8904e]">A+</div>
+                <div className="mt-1 text-xs text-[#4f4036]/70">100/100</div>
+              </div>
+            </div>
+            <div>
+              <p className="font-mono text-xl text-white">{easterEgg.hostname}</p>
+              <p className="mt-2 text-lg text-[#f0b87a]">{easterEgg.message}</p>
+              <p className="mt-3 text-sm text-white/70">
+                Now put your <em>actual</em> site in and let&apos;s see what we&apos;re working with.
+              </p>
+              <button
+                onClick={() => {
+                  setEasterEgg(null);
+                  setUrl("");
+                }}
+                className="mt-5 rounded-full bg-gradient-to-br from-[#f0b87a] to-[#c8904e] px-6 py-3 text-sm font-semibold text-[#1a130e] transition hover:brightness-105"
+              >
+                Fine, I&apos;ll check mine
+              </button>
+            </div>
+          </div>
         )}
 
         {/* Results */}
