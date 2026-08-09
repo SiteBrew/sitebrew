@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+
+# builds
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# environment — NEVER commit; this repo is public.
+# Secrets belong in Vercel > Settings > Environment Variables.
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# misc
+.DS_Store
+.vercel

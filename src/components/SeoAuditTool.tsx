@@ -1,0 +1,224 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import type { AuditResult } from "@/lib/seo-audit";
+
+const GRADE_STYLES: Record<string, { ring: string; text: string; bar: string }> = {
+  A: { ring: "border-[#2ab89a]", text: "text-[#2ab89a]", bar: "from-[#7aecd4] to-[#2ab89a]" },
+  B: { ring: "border-[#4f6aff]", text: "text-[#4f6aff]", bar: "from-[#7aa4f0] to-[#4f6aff]" },
+  C: { ring: "border-[#c8904e]", text: "text-[#c8904e]", bar: "from-[#f0b87a] to-[#c8904e]" },
+  D: { ring: "border-[#e08a4a]", text: "text-[#e08a4a]", bar: "from-[#f0b87a] to-[#e08a4a]" },
+  F: { ring: "border-[#d9534f]", text: "text-[#d9534f]", bar: "from-[#f0918e] to-[#d9534f]" },
+  "N/A": { ring: "border-[#4f4036]/30", text: "text-[#4f4036]/50", bar: "from-[#ddd] to-[#bbb]" },
+};
+
+const gradeStyle = (g: string) => GRADE_STYLES[g] ?? GRADE_STYLES["N/A"];
+
+function verdict(score: number) {
+  if (score >= 90) return "Strong foundation — a few refinements would sharpen it.";
+  if (score >= 80) return "Solid, but leaving rankings on the table.";
+  if (score >= 70) return "Middling. Competitors doing this properly will outrank you.";
+  if (score >= 60) return "Underperforming. Several fixable problems are holding it back.";
+  return "Significant issues are actively working against your visibility.";
+}
+
+export default function SeoAuditTool() {
+  const [url, setUrl] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<AuditResult | null>(null);
+
+  const runAudit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loading || !url.trim()) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await fetch("/api/audit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Audit failed");
+      setResult(data as AuditResult);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const overall = result ? gradeStyle(result.overallGrade) : null;
+
+  return (
+    <section id="audit" className="mx-auto w-full max-w-6xl px-6 pb-16 md:px-10">
+      <div className="rounded-[2rem] border border-[#1f2e8c]/20 bg-gradient-to-br from-[#1f2e8c] to-[#2d45c4] p-8 md:p-10">
+        <div className="max-w-2xl">
+          <p className="font-mono text-sm uppercase tracking-widest text-[#f0b87a]">
+            Free Instant Audit
+          </p>
+          <h2 className="mt-2 font-mono text-3xl text-white md:text-4xl">
+            How healthy is your website&apos;s SEO?
+          </h2>
+          <p className="mt-4 text-white/80">
+            Enter your address and we&apos;ll check it against the same criteria Google uses —
+            crawlability, on-page structure, content, sharing, and structured data. Takes about
+            ten seconds. No email required.
+          </p>
+        </div>
+
+        {/* Input */}
+        <form onSubmit={runAudit} className="mt-8 flex flex-col gap-3 sm:flex-row">
+          <label htmlFor="audit-url" className="sr-only">
+            Your website address
+          </label>
+          <input
+            id="audit-url"
+            type="text"
+            inputMode="url"
+            autoComplete="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="yourbusiness.com"
+            className="flex-1 rounded-full border border-white/25 bg-white/10 px-6 py-4 text-white placeholder-white/50 backdrop-blur outline-none transition focus:border-[#f0b87a] focus:bg-white/15"
+          />
+          <button
+            type="submit"
+            disabled={loading || !url.trim()}
+            className="rounded-full bg-gradient-to-br from-[#f0b87a] to-[#c8904e] px-8 py-4 font-semibold text-[#1a130e] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading ? "Analysing…" : "Run Free Audit"}
+          </button>
+        </form>
+
+        {error && (
+          <p role="alert" className="mt-4 rounded-2xl bg-white/10 px-5 py-3 text-sm text-[#ffd9d8]">
+            {error}
+          </p>
+        )}
+
+        {/* Results */}
+        {result && overall && (
+          <div className="mt-10">
+            {/* Overall */}
+            <div className="flex flex-col items-center gap-6 rounded-2xl border border-white/20 bg-white/10 p-8 backdrop-blur sm:flex-row sm:items-center">
+              <div
+                className={`flex h-28 w-28 flex-none items-center justify-center rounded-full border-4 bg-white ${overall.ring}`}
+              >
+                <div className="text-center leading-none">
+                  <div className={`font-mono text-4xl font-bold ${overall.text}`}>
+                    {result.overallGrade}
+                  </div>
+                  <div className="mt-1 text-xs text-[#4f4036]/70">{result.overallScore}/100</div>
+                </div>
+              </div>
+              <div className="text-center sm:text-left">
+                <p className="font-mono text-xl text-white">
+                  {new URL(result.finalUrl).hostname}
+                </p>
+                <p className="mt-1 text-white/80">{verdict(result.overallScore)}</p>
+                <p className="mt-3 text-sm text-[#f0b87a]">
+                  {result.totalIssues === 0
+                    ? "No issues detected in our checks."
+                    : `${result.totalIssues} issue${result.totalIssues === 1 ? "" : "s"} found` +
+                      (result.criticalIssues > 0
+                        ? ` — ${result.criticalIssues} critical`
+                        : "")}
+                </p>
+              </div>
+            </div>
+
+            {/* Categories */}
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {result.categories.map((cat) => {
+                const s = gradeStyle(cat.grade);
+                return (
+                  <div
+                    key={cat.key}
+                    className="rounded-2xl border border-white/20 bg-white/10 p-5 backdrop-blur"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h3 className="font-semibold text-white">{cat.label}</h3>
+                        <p className="mt-1 text-sm text-white/70">{cat.blurb}</p>
+                      </div>
+                      <div className="flex-none text-right">
+                        <div className="font-mono text-2xl font-bold text-white">
+                          {cat.assessed ? cat.grade : "—"}
+                        </div>
+                        {cat.assessed && (
+                          <div className="text-xs text-white/60">{cat.score}/100</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {cat.assessed ? (
+                      <>
+                        <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/15">
+                          <div
+                            className={`h-full rounded-full bg-gradient-to-r ${s.bar}`}
+                            style={{ width: `${cat.score}%` }}
+                          />
+                        </div>
+                        <p className="mt-3 text-xs text-white/60">
+                          {cat.issues === 0
+                            ? `All ${cat.total} checks passed`
+                            : `${cat.issues} of ${cat.total} checks need attention` +
+                              (cat.criticalIssues > 0 ? ` · ${cat.criticalIssues} critical` : "")}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="mt-4 text-xs text-white/60">
+                        Not assessable from the page source.
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {result.javascriptRendered && (
+              <p className="mt-4 rounded-2xl bg-white/10 px-5 py-3 text-xs text-white/70">
+                Note: this site renders its content with JavaScript. Google runs JavaScript and
+                will see that content, so we&apos;ve excluded those checks rather than count them
+                against you. A full audit covers them properly.
+              </p>
+            )}
+
+            {/* CTA */}
+            <div className="mt-6 rounded-2xl border border-[#f0b87a]/40 bg-[#f5f1e8] p-6 md:p-8">
+              <h3 className="font-mono text-xl text-[#1a130e] md:text-2xl">
+                Want to know exactly what&apos;s holding it back?
+              </h3>
+              <p className="mt-3 text-[#4f4036]">
+                This is the summary. The full report names every issue, ranks them by impact on
+                your rankings, and lays out what it takes to fix each one. We&apos;ll walk you
+                through it and quote the work — no obligation.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Link
+                  href="#contact"
+                  className="rounded-full bg-gradient-to-br from-[#1f2e8c] to-[#2d45c4] px-7 py-3 font-semibold text-white transition hover:brightness-110"
+                >
+                  Get My Full Report &amp; Quote
+                </Link>
+                <button
+                  onClick={() => {
+                    setResult(null);
+                    setUrl("");
+                  }}
+                  className="rounded-full border border-[#1f2e8c]/30 px-7 py-3 font-semibold text-[#1f2e8c] transition hover:bg-[#1f2e8c]/5"
+                >
+                  Check Another Site
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
