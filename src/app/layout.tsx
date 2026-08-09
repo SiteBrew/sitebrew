@@ -247,7 +247,7 @@ export default function RootLayout({
                   {
                     "@type": "Question",
                     "name": "How much does a website cost?",
-                    "acceptedAnswer": {"@type": "Answer", "text": "Our Starter Site is a one-time fee of $1,000 — a polished, professional website that ranks from day one. Our Growth Plan is $800 upfront plus $125/month for ongoing SEO updates, performance monitoring, and priority support."}
+                    "acceptedAnswer": {"@type": "Answer", "text": "Our Starter Site is a one-time fee of $1,000 — a polished, professional website that ranks from day one. Our Growth Plan is $500 upfront plus $125/month for ongoing SEO updates, performance monitoring, and priority support."}
                   },
                   {
                     "@type": "Question",

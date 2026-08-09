@@ -58,7 +58,7 @@ const packages = [
     name: "Growth Plan",
     price: "Monthly Retainer",
     badge: "Most Popular",
-    priceNote: "$800 + $125/mo retainer",
+    priceNote: "$500 + $125/mo retainer",
     description:
       "Your website, maintained and improved every month so it keeps climbing local search rankings across Georgia and South Carolina. Ideal for established businesses that want to stay ahead of local competitors and keep their site performing long after launch.",
     features: [
