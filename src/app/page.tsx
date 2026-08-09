@@ -218,6 +218,8 @@ export default function Home() {
           </div>
         </section>
 
+        <SeoAuditTool />
+
         {/* ── Marquee Banner ── */}
         <div className="overflow-hidden border-y border-[#1f2e8c]/15 bg-[#1f2e8c] py-3">
           <div className="flex w-max animate-marquee gap-0">
@@ -246,8 +248,6 @@ export default function Home() {
             ))}
           </div>
         </div>
-
-        <SeoAuditTool />
 
         <section id="services" className="bg-gradient-to-b from-[#f0f4ff] to-[#f5f1e8] py-16">
           <div className="mx-auto w-full max-w-6xl px-6 md:px-10">
