@@ -73,27 +73,6 @@ const packages = [
   },
 ];
 
-const caseStudies = [
-  {
-    name: "Horner Wilson Construction",
-    url: "https://hornerwilson.com",
-    image: "",
-    result: "A polished, mobile-first website for a Georgia construction company — organic traffic increased 340% in the first 3 months with built-in local SEO.",
-  },
-  {
-    name: "Lake Blue Ridge Concert Series",
-    url: "https://lakeblueridgeconcertseries.com",
-    image: "",
-    result: "A seasonal event website with integrated ticketing, lineup pages, and venue info — concert attendance grew 60% year-over-year after the redesign.",
-  },
-  {
-    name: "Branham Group",
-    url: "https://branham-group.com",
-    image: "",
-    result: "A full-service business site with lead generation at its core — drove 50+ qualified inquiries within the first month of launch.",
-  },
-];
-
 const faqs = [
   {
     question: "How long does it take to launch my website?",
@@ -141,9 +120,6 @@ export default function Home() {
           <div className="hidden items-center gap-6 text-sm font-medium text-[#241912] md:flex">
             <a href="#services" className="hover:text-[#1f2e8c]">
               Services
-            </a>
-            <a href="#work" className="hover:text-[#1f2e8c]">
-              Our Work
             </a>
             <a href="#process" className="hover:text-[#1f2e8c]">
               Process
@@ -300,43 +276,6 @@ export default function Home() {
               </article>
             ))}
           </div>
-          </div>
-        </section>
-
-        {/* ── Our Work / Case Studies ── */}
-        <section id="work" className="bg-gradient-to-b from-[#f5f1e8] to-[#f0f4ff] py-16">
-          <div className="mx-auto w-full max-w-6xl px-6 md:px-10">
-            <h2 className="font-mono text-3xl text-[#1a130e] md:text-4xl">
-              Our Work
-            </h2>
-            <p className="mt-3 max-w-xl text-[#4f4036]">
-              Real websites we&apos;ve built for local businesses across Georgia and South Carolina — each designed to drive real results.
-            </p>
-            <div className="mt-10 grid gap-6 md:grid-cols-3">
-              {caseStudies.map((cs) => (
-                <a
-                  key={cs.name}
-                  href={cs.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group flex flex-col rounded-3xl border border-[#1f2e8c]/20 bg-white/80 p-7 shadow-[0_14px_44px_-24px_rgba(31,46,140,0.35)] transition hover:shadow-[0_20px_60px_-20px_rgba(31,46,140,0.5)] hover:-translate-y-1"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1f2e8c]/10 text-sm font-bold text-[#1f2e8c]">
-                      {cs.name.charAt(0)}
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-[#1a130e] group-hover:text-[#1f2e8c] transition">
-                        {cs.name}
-                      </h3>
-                      <p className="text-xs text-[#4f4036]/60 break-all">{cs.url.replace("https://", "")}</p>
-                    </div>
-                  </div>
-                  <p className="mt-5 flex-1 text-sm text-[#4f4036] leading-relaxed">{cs.result}</p>
-                  <span className="mt-4 inline-block text-xs font-semibold text-[#1f2e8c] group-hover:underline">View site →</span>
-                </a>
-              ))}
-            </div>
           </div>
         </section>
 
