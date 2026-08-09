@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runAudit, toPublicResult, type CoreWebVitals } from "@/lib/seo-audit";
+import { runAudit, combineAudits, type CoreWebVitals } from "@/lib/seo-audit";
 
 export const runtime = "nodejs";
 // PageSpeed Insights is the slow leg — it runs a real Lighthouse pass.
@@ -116,6 +116,67 @@ async function fetchRobots(
   }
 }
 
+/** Max pages to audit, including the entry page. Keeps us inside maxDuration. */
+const MAX_PAGES = 4;
+
+/** Pull candidate URLs from sitemap.xml. */
+async function urlsFromSitemap(origin: string, signal: AbortSignal): Promise<string[]> {
+  try {
+    const res = await fetch(`${origin}/sitemap.xml`, {
+      signal,
+      headers: { "User-Agent": "SiteBrewAuditBot/1.0 (+https://sitebrew.co)" },
+    });
+    if (!res.ok) return [];
+    const xml = (await res.text()).slice(0, 500_000);
+    return [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)]
+      .map((m) => m[1])
+      .filter((u) => u.startsWith(origin))
+      // Sitemap indexes point at more sitemaps; we only want real pages here.
+      .filter((u) => !/\.xml($|\?)/i.test(u));
+  } catch {
+    return [];
+  }
+}
+
+/** Fall back to same-origin links in the page's own navigation. */
+function urlsFromLinks(html: string, origin: string): string[] {
+  const hrefs = [...html.matchAll(/<a[^>]+href=["']([^"'#]+)["']/gi)].map((m) => m[1]);
+  const out = new Set<string>();
+  for (const href of hrefs) {
+    let abs: string;
+    try {
+      abs = new URL(href, origin).toString();
+    } catch {
+      continue;
+    }
+    if (!abs.startsWith(origin)) continue;
+    // Skip assets, feeds, and anything transactional.
+    if (/\.(jpg|jpeg|png|gif|webp|avif|svg|pdf|zip|mp4|css|js|ico|xml|json)($|\?)/i.test(abs)) continue;
+    if (/\/(cart|checkout|login|account|search|wp-admin|wp-login)/i.test(abs)) continue;
+    out.add(abs.split("#")[0].replace(/\/$/, ""));
+  }
+  return [...out];
+}
+
+/** Fetch a page and return its HTML, or null. */
+async function fetchHtml(url: string, signal: AbortSignal): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      signal,
+      redirect: "follow",
+      headers: {
+        "User-Agent": "SiteBrewAuditBot/1.0 (+https://sitebrew.co)",
+        Accept: "text/html,application/xhtml+xml",
+      },
+    });
+    if (!res.ok) return null;
+    if (!(res.headers.get("content-type") ?? "").includes("html")) return null;
+    return (await res.text()).slice(0, 2_000_000);
+  } catch {
+    return null;
+  }
+}
+
 async function headOk(url: string, signal: AbortSignal): Promise<boolean> {
   try {
     const res = await fetch(url, {
@@ -197,20 +258,50 @@ export async function POST(req: NextRequest) {
     ]);
     clearTimeout(timeout);
 
-    const detailed = runAudit({
-      url: url.toString(),
-      finalUrl,
-      html,
+    const isHttps = new URL(finalUrl).protocol === "https:";
+    const shared = {
       robotsTxtOk: robots.ok,
       sitemapInRobots: robots.declaresSitemap,
       sitemapOk,
-      isHttps: new URL(finalUrl).protocol === "https:",
-      vitals,
+      isHttps,
+    };
+
+    /*
+     * Audit a few interior pages alongside the entry page. Scoring only the
+     * homepage was the tool's biggest accuracy gap — businesses commonly have a
+     * polished front page and untouched service pages, so the homepage alone
+     * flatters the site. Prefer the sitemap for discovery, fall back to the
+     * page's own links. Core Web Vitals are fetched once and shared, since
+     * re-running Lighthouse per page would blow the time budget.
+     */
+    const entryKey = finalUrl.split("#")[0].replace(/\/$/, "");
+    const discovered = [
+      ...(await urlsFromSitemap(origin, controller.signal)),
+      ...urlsFromLinks(html, origin),
+    ]
+      .map((u) => u.split("#")[0].replace(/\/$/, ""))
+      .filter((u) => u !== entryKey && u !== origin);
+
+    const extraUrls = [...new Set(discovered)].slice(0, MAX_PAGES - 1);
+    const extraHtml = await Promise.all(
+      extraUrls.map((u) => fetchHtml(u, controller.signal))
+    );
+
+    const auditUrls = [finalUrl];
+    const audits = [
+      runAudit({ url: url.toString(), finalUrl, html, vitals, ...shared }),
+    ];
+    extraHtml.forEach((pageHtml, i) => {
+      if (!pageHtml) return;
+      auditUrls.push(extraUrls[i]);
+      // Vitals are page-specific; only the entry page has measured values.
+      audits.push(
+        runAudit({ url: extraUrls[i], finalUrl: extraUrls[i], html: pageHtml, vitals: null, ...shared })
+      );
     });
 
-    // Strip the specific findings. Scores and issue counts are real and shown;
-    // which checks failed, and how to fix them, is the conversation.
-    return NextResponse.json(toPublicResult(detailed), { status: 200 });
+    // combineAudits already strips per-check detail — scores and counts only.
+    return NextResponse.json(combineAudits(audits, auditUrls), { status: 200 });
   } catch (err) {
     console.error("[SiteBrew] Audit error:", err);
     return NextResponse.json({ error: "Something went wrong running the audit." }, { status: 500 });

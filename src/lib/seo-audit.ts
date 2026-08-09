@@ -102,6 +102,57 @@ const stripTags = (html: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+/**
+ * Body text with site chrome removed.
+ *
+ * Counting raw stripped HTML credits navigation, footers, cookie banners and
+ * repeated menus as "content", which flatters thin pages — a homepage with two
+ * paragraphs and a 40-link mega-menu looked substantial. Strip the chrome first,
+ * and prefer <main>/<article> when the page marks it up.
+ */
+const contentText = (html: string) => {
+  const scoped = html.match(/<(?:main|article)[^>]*>[\s\S]*?<\/(?:main|article)>/i);
+  const source = scoped ? scoped[0] : html;
+  return stripTags(
+    source
+      .replace(/<nav[\s\S]*?<\/nav>/gi, ' ')
+      .replace(/<header[\s\S]*?<\/header>/gi, ' ')
+      .replace(/<footer[\s\S]*?<\/footer>/gi, ' ')
+      .replace(/<aside[\s\S]*?<\/aside>/gi, ' ')
+      .replace(/<form[\s\S]*?<\/form>/gi, ' ')
+      .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
+  );
+};
+
+/**
+ * Every image reference on the page, including ones a naive <img> scan misses.
+ *
+ * Squarespace, Wix and modern WordPress all lazy-load: the real URL sits in
+ * data-src or srcset while the src attribute holds a placeholder, and responsive
+ * images are declared with <picture>/<source>. Counting only <img src> both
+ * undercounts images and misreads which formats are actually served.
+ */
+interface ImgInfo { tag: string; hasAlt: boolean; modern: boolean; sized: boolean }
+const collectImages = (html: string): ImgInfo[] => {
+  const tags = [
+    ...(html.match(/<img[^>]*>/gi) || []),
+    ...(html.match(/<source[^>]*>/gi) || []),
+  ];
+  return tags.map((tag) => {
+    // Any attribute that can carry the real asset URL.
+    const urls = [
+      ...(tag.match(/(?:src|data-src|data-lazy-src|data-original|srcset|data-srcset)=["']([^"']+)["']/gi) || []),
+    ].join(' ');
+    return {
+      tag,
+      // <source> has no alt of its own; it inherits from the parent <picture><img>.
+      hasAlt: /<source/i.test(tag) ? true : /alt=["'][^"']+["']/i.test(tag),
+      modern: /\.(webp|avif)\b/i.test(urls) || /type=["']image\/(webp|avif)["']/i.test(tag),
+      sized: /\bwidth=/i.test(tag) && /\bheight=/i.test(tag),
+    };
+  });
+};
+
 const head = (html: string) => {
   const m = html.match(/<head[\s\S]*?<\/head>/i);
   return m ? m[0] : html.slice(0, 40000);
@@ -195,7 +246,7 @@ export function runAudit(input: AuditInput): DetailedAuditResult {
   const sitemapInRobots = input.sitemapInRobots ?? false;
   const pageBytes = Buffer.byteLength(html, 'utf8');
   const h = head(html);
-  const body = stripTags(html);
+  const body = contentText(html);
   const checks: Array<Check & { category: string }> = [];
 
   const wordCountRaw = body.split(/\s+/).filter(Boolean).length;
@@ -344,17 +395,17 @@ export function runAudit(input: AuditInput): DetailedAuditResult {
   add('content', 'word-count-depth', 'At least 1,000 words (in-depth)', words >= 1000, 'minor',
     `Approximately ${words} words.`, true);
 
-  const imgs = html.match(/<img[^>]*>/gi) || [];
-  const imgsWithAlt = imgs.filter((t) => /alt=["'][^"']+["']/i.test(t)).length;
+  const imgs = collectImages(html);
+  const imgsWithAlt = imgs.filter((i) => i.hasAlt).length;
   add('content', 'img-alt', 'Every image has descriptive alt text',
     imgs.length === 0 || imgsWithAlt === imgs.length, 'warning',
     imgs.length ? `${imgsWithAlt} of ${imgs.length} images have alt text.` : 'No images found.', true);
   // Legacy JPEG/PNG is one of the most common causes of a poor LCP.
-  const modernImgs = imgs.filter((t) => /\.(webp|avif)/i.test(t)).length;
+  const modernImgs = imgs.filter((i) => i.modern).length;
   add('content', 'img-format', 'Images use modern formats (WebP/AVIF)',
     imgs.length === 0 || modernImgs / imgs.length >= 0.5, 'warning',
     imgs.length ? `${modernImgs} of ${imgs.length} images use WebP or AVIF.` : 'No images found.', true);
-  const sizedImgs = imgs.filter((t) => /width=/i.test(t) && /height=/i.test(t)).length;
+  const sizedImgs = imgs.filter((i) => i.sized).length;
   add('content', 'img-dimensions', 'Images declare width and height',
     imgs.length === 0 || sizedImgs / imgs.length >= 0.8, 'warning',
     imgs.length ? `${sizedImgs} of ${imgs.length} images set dimensions. Missing ones cause layout shift.` : 'No images.', true);
@@ -499,4 +550,122 @@ export function runAudit(input: AuditInput): DetailedAuditResult {
 export function toPublicResult(r: DetailedAuditResult): AuditResult {
   const { checks: _checks, ...pub } = r;
   return pub;
+}
+
+
+/* ── Site-level audit ─────────────────────────────────────────────────────── */
+
+export interface PageAudit {
+  url: string;
+  score: number;
+  grade: string;
+  issues: number;
+  criticalIssues: number;
+}
+
+export interface SiteAuditResult extends AuditResult {
+  /** Per-page breakdown. First entry is the page the visitor entered. */
+  pages: PageAudit[];
+  pagesAudited: number;
+  /** Worst-scoring page — usually where the real problem is. */
+  weakestPage?: PageAudit;
+}
+
+/**
+ * Combine several page audits into one site result.
+ *
+ * A single-page audit was the biggest accuracy gap in this tool: it scored a
+ * homepage and presented the number as a site score. Businesses routinely have
+ * a polished homepage and untouched service pages, which is precisely the work
+ * being sold — so the homepage alone flatters the site and hides the pitch.
+ *
+ * Category scores are averaged across pages. Site-wide checks (HTTPS, robots,
+ * sitemap, Core Web Vitals) are identical on every page, so averaging leaves
+ * them unchanged; per-page checks (titles, headings, content) get smoothed,
+ * which is the intent — one strong page can no longer carry the whole site.
+ */
+export function combineAudits(
+  audits: DetailedAuditResult[],
+  urls: string[]
+): SiteAuditResult {
+  if (audits.length === 0) throw new Error('combineAudits called with no audits');
+  const primary = audits[0];
+  if (audits.length === 1) {
+    return {
+      ...toPublicResult(primary),
+      pages: [{
+        url: urls[0], score: primary.overallScore, grade: primary.overallGrade,
+        issues: primary.totalIssues, criticalIssues: primary.criticalIssues,
+      }],
+      pagesAudited: 1,
+    };
+  }
+
+  const categories: CategoryResult[] = CATEGORIES.map((cat) => {
+    const per = audits
+      .map((a) => a.categories.find((c) => c.key === cat.key))
+      .filter((c): c is CategoryResult => Boolean(c) && c!.assessed);
+    if (per.length === 0) {
+      return {
+        key: cat.key, label: cat.label, blurb: cat.blurb, score: 0, grade: 'N/A',
+        assessed: false, passed: 0, total: 0, issues: 0, criticalIssues: 0,
+      };
+    }
+    const avg = Math.round(per.reduce((s, c) => s + c.score, 0) / per.length);
+    return {
+      key: cat.key,
+      label: cat.label,
+      blurb: cat.blurb,
+      score: avg,
+      grade: toGrade(avg),
+      assessed: true,
+      passed: per.reduce((s, c) => s + c.passed, 0),
+      total: per.reduce((s, c) => s + c.total, 0),
+      issues: per.reduce((s, c) => s + c.issues, 0),
+      criticalIssues: per.reduce((s, c) => s + c.criticalIssues, 0),
+    };
+  });
+
+  const assessed = categories.filter((c) => c.assessed);
+  const catWeight = (k: string) => CATEGORIES.find((c) => c.key === k)?.weight ?? 0;
+  const totalWeight = assessed.reduce((sum, c) => sum + catWeight(c.key), 0);
+  const rawScore = totalWeight
+    ? Math.round(assessed.reduce((sum, c) => sum + c.score * catWeight(c.key), 0) / totalWeight)
+    : 0;
+
+  // A fatal problem on ANY page caps the site. A noindex tag on a service page
+  // is just as disqualifying for that page as it would be on the homepage.
+  const criticalTotal = categories.reduce((s, c) => s + c.criticalIssues, 0);
+  const anyNoindex = audits.some((a) =>
+    a.checks.some((c) => c.id === 'indexable' && !c.passed)
+  );
+  let cap = 100;
+  if (anyNoindex) cap = 35;
+  else if (criticalTotal >= 2) cap = 45;
+  else if (criticalTotal === 1) cap = 65;
+  const finalScore = Math.min(rawScore, cap);
+
+  const pages: PageAudit[] = audits.map((a, i) => ({
+    url: urls[i] ?? a.finalUrl,
+    score: a.overallScore,
+    grade: a.overallGrade,
+    issues: a.totalIssues,
+    criticalIssues: a.criticalIssues,
+  }));
+
+  return {
+    url: primary.url,
+    finalUrl: primary.finalUrl,
+    fetchedAt: new Date().toISOString(),
+    overallScore: finalScore,
+    overallGrade: toGrade(finalScore),
+    totalIssues: audits.reduce((s, a) => s + a.totalIssues, 0),
+    criticalIssues: criticalTotal,
+    categories,
+    javascriptRendered: audits.some((a) => a.javascriptRendered),
+    vitals: primary.vitals,
+    pages,
+    pagesAudited: audits.length,
+    weakestPage: [...pages].sort((a, b) => a.score - b.score)[0],
+  };
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { AuditResult } from "@/lib/seo-audit";
+import type { SiteAuditResult } from "@/lib/seo-audit";
 
 const GRADE_STYLES: Record<string, { ring: string; text: string; bar: string }> = {
   A: { ring: "border-[#2ab89a]", text: "text-[#2ab89a]", bar: "from-[#7aecd4] to-[#2ab89a]" },
@@ -34,7 +34,7 @@ export default function SeoAuditTool() {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<AuditResult | null>(null);
+  const [result, setResult] = useState<SiteAuditResult | null>(null);
 
   const runAudit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,7 +50,7 @@ export default function SeoAuditTool() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Audit failed");
-      setResult(data as AuditResult);
+      setResult(data as SiteAuditResult);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
@@ -73,7 +73,8 @@ export default function SeoAuditTool() {
           <p className="mt-4 text-white/80">
             Enter your address and we&apos;ll run live checks on your technical setup,
             on-page structure, and Google&apos;s Core Web Vitals — the page-experience signals
-            Google confirms it ranks on. No email required.
+            Google confirms it ranks on. We check several pages, not just the homepage.
+            No email required.
           </p>
         </div>
 
@@ -97,7 +98,7 @@ export default function SeoAuditTool() {
             disabled={loading || !url.trim()}
             className="rounded-full bg-gradient-to-br from-[#f0b87a] to-[#c8904e] px-8 py-4 font-semibold text-[#1a130e] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading ? "Analysing…" : "Check My Site"}
+            {loading ? "Analysing site…" : "Check My Site"}
           </button>
         </form>
 
@@ -241,11 +242,54 @@ export default function SeoAuditTool() {
               </p>
             )}
 
+            {/* Per-page breakdown — a strong homepage can hide weak service pages */}
+            {result.pages && result.pages.length > 1 && (
+              <div className="mt-4 rounded-2xl border border-white/20 bg-white/10 p-5 backdrop-blur">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h3 className="font-semibold text-white">
+                    Pages checked ({result.pagesAudited})
+                  </h3>
+                  {result.weakestPage && (
+                    <span className="text-xs text-white/60">
+                      Weakest: {result.weakestPage.score}/100
+                    </span>
+                  )}
+                </div>
+                <ul className="mt-4 space-y-2">
+                  {result.pages.map((pg) => {
+                    let path = pg.url;
+                    try {
+                      path = new URL(pg.url).pathname || "/";
+                    } catch {
+                      /* keep raw */
+                    }
+                    const st = gradeStyle(pg.grade);
+                    return (
+                      <li
+                        key={pg.url}
+                        className="flex items-center justify-between gap-4 rounded-xl bg-white/10 px-4 py-3"
+                      >
+                        <span className="truncate font-mono text-sm text-white/85">{path}</span>
+                        <span className="flex flex-none items-center gap-3">
+                          <span className="text-xs text-white/60">
+                            {pg.issues} issue{pg.issues === 1 ? "" : "s"}
+                          </span>
+                          <span className={`font-mono text-sm font-bold ${st.text.replace("text-", "text-")}`}>
+                            {pg.score}
+                          </span>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+
             {/* Scope caveat — naming the gaps is what makes the CTA credible */}
             <div className="mt-4 rounded-2xl border border-white/15 bg-white/5 px-5 py-4">
               <p className="text-xs leading-relaxed text-white/70">
                 <span className="font-semibold text-white/85">What this covers:</span> technical
-                setup, on-page structure, and Core Web Vitals for this page. It does{" "}
+                setup, on-page structure, and Core Web Vitals across the pages listed above. It does{" "}
                 <span className="font-semibold text-white/85">not</span> measure backlinks, domain
                 authority, your Google Business Profile, keyword relevance, or where you currently
                 rank &mdash; and for local search those often matter more than everything above.
