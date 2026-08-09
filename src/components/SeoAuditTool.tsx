@@ -22,12 +22,12 @@ const gradeStyle = (g: string) => GRADE_STYLES[g] ?? GRADE_STYLES["N/A"];
  * inaccurate and a bad first impression.
  */
 function verdict(score: number) {
-  if (score >= 90) return "Exceptional. This is in the top few percent of sites we check.";
-  if (score >= 80) return "Strong. Ahead of nearly every local competitor.";
-  if (score >= 65) return "Above average, with clear room to pull ahead.";
-  if (score >= 50) return "Typical for a small-business site — and that's the opportunity.";
-  if (score >= 35) return "Below par. Several fixable things are limiting your visibility.";
-  return "Significant gaps are working against you in search.";
+  if (score >= 90) return "Exceptional. Almost nothing left to fix.";
+  if (score >= 75) return "Strong. Ahead of nearly every local competitor.";
+  if (score >= 60) return "Solid foundation, but competitors doing this properly will outrank you.";
+  if (score >= 40) return "Middle of the pack — which is where most of your competitors sit too.";
+  if (score >= 25) return "Underperforming. Several fixable problems are costing you visibility.";
+  return "Significant gaps are actively working against you in search.";
 }
 
 export default function SeoAuditTool() {
@@ -171,8 +171,9 @@ export default function SeoAuditTool() {
                 </p>
                 <p className="mt-1 text-white/80">{verdict(result.overallScore)}</p>
                 <p className="mt-2 text-xs text-white/50">
-                  Scored on a strict scale — most small-business sites land between 35 and 55.
-                  Above 90 is near-perfect.
+                  Graded on a curve against real-world sites, the way Lighthouse scores
+                  performance — not a raw percentage of checks passed. Most small-business
+                  sites land in the 25&ndash;45 range. Above 90 means near-flawless.
                 </p>
                 <p className="mt-3 text-sm text-[#f0b87a]">
                   {result.totalIssues === 0
