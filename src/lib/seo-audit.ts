@@ -84,6 +84,14 @@ const SEVERITY_WEIGHT: Record<Severity, number> = {
   minor: 1,
 };
 
+/*
+ * Faults that make a page unfit for search regardless of everything else.
+ * Only these trigger the score cap. Severity is left free to express weight:
+ * a brand-only title is nearly as damaging as no title, so it earns weight 5,
+ * but it isn't fatal and shouldn't floor the whole site at 35.
+ */
+const FATAL_CHECKS = new Set(['https', 'indexable', 'viewport', 'title-exists']);
+
 export function toGrade(score: number): string {
   if (score >= 90) return 'A';
   if (score >= 80) return 'B';
@@ -195,8 +203,10 @@ const countTags = (html: string, tag: string) =>
  * by Squarespace, Wix, Shopify and every modern WordPress theme. Weighting them
  * heavily scores the hosting platform, not the site: a tattoo studio whose title
  * tag was the four letters "HCTC" and whose meta description was empty still
- * banked a full 25 points there. They're now 14, with the weight moved to
- * on-page and content where real work shows.
+ * banked a full 25 points there. They're now 14. Structured data went the same
+ * way for the same reason — Squarespace injects LocalBusiness markup from the
+ * business details you type into settings, so 16% was paying for the platform
+ * a second time. It is now 8, with the weight moved to on-page and content.
  *
  * Category weights drive the overall score. Scoring the raw check list instead
  * lets whichever category happens to contain the most checks dominate: with six
@@ -219,13 +229,13 @@ const CATEGORIES = [
   },
   {
     key: 'onpage',
-    weight: 26,
+    weight: 30,
     label: 'On-Page SEO',
     blurb: 'Titles, descriptions, and heading structure.',
   },
   {
     key: 'content',
-    weight: 22,
+    weight: 26,
     label: 'Content & Accessibility',
     blurb: 'Content depth, image alt text, and internal linking.',
   },
@@ -237,7 +247,7 @@ const CATEGORIES = [
   },
   {
     key: 'schema',
-    weight: 16,
+    weight: 8,
     label: 'Structured Data',
     blurb: 'Markup powering rich results and local listings.',
   },
@@ -355,7 +365,7 @@ export function runAudit(input: AuditInput): DetailedAuditResult {
   add('onpage', 'title-exists', 'Title tag present', Boolean(title), 'critical',
     title ? `"${title}"` : 'No title tag.');
   add('onpage', 'title-length', 'Title length within 30–60 characters',
-    title.length >= 30 && title.length <= 60, 'warning',
+    title.length >= 30 && title.length <= 60, 'critical',
     `Title is ${title.length} characters. Google truncates around 60.`);
   // Generic titles are extremely common and waste the single strongest on-page signal.
   const siteName = metaContent(h, 'property', 'og:site_name');
@@ -371,14 +381,14 @@ export function runAudit(input: AuditInput): DetailedAuditResult {
     Boolean(title) &&
     (norm(title) === norm(siteName) || norm(title) === domainRoot || titleWords < 3);
   add('onpage', 'title-descriptive', 'Title names the service, not just the brand',
-    Boolean(title) && !genericWord && !brandOnly, 'warning',
+    Boolean(title) && !genericWord && !brandOnly, 'critical',
     !title ? 'No title.'
       : genericWord ? `"${title}" is a placeholder title.`
       : brandOnly ? `"${title}" is brand-only (${titleWords} word${titleWords === 1 ? '' : 's'}). It should name the service and location — nobody searches a brand they haven't met yet.`
       : 'Descriptive.');
 
   const desc = metaContent(h, 'name', 'description');
-  add('onpage', 'desc-exists', 'Meta description present', Boolean(desc), 'warning',
+  add('onpage', 'desc-exists', 'Meta description present', Boolean(desc), 'critical',
     desc ? `"${desc}"` : 'No meta description — Google will invent one from page text.');
   add('onpage', 'desc-length', 'Meta description within 120–160 characters',
     desc.length >= 120 && desc.length <= 160, 'warning',
@@ -532,7 +542,7 @@ export function runAudit(input: AuditInput): DetailedAuditResult {
   const rawScore = totalWeight
     ? Math.round(assessedCats.reduce((sum, c) => sum + c.score * catWeight(c.key), 0) / totalWeight)
     : 0;
-  const criticalFails = allFailed.filter((c) => c.severity === 'critical');
+  const criticalFails = allFailed.filter((c) => FATAL_CHECKS.has(c.id));
 
   /*
    * Critical failures CAP the overall score rather than merely subtracting from

@@ -16,8 +16,14 @@ export const maxDuration = 60;
  * Returns null on any failure. The audit degrades gracefully: the performance
  * category is simply reported as not assessed rather than scored as zero.
  */
-/** Give up on PageSpeed after this long and report performance as unassessed. */
-const VITALS_TIMEOUT_MS = 18000;
+/*
+ * Give up on PageSpeed after this long. 18s was too tight — a real Lighthouse
+ * pass routinely needs 20-30s, so every audit timed out and reported Core Web
+ * Vitals as unassessed. That silently inflated scores, because the category's
+ * 18% redistributed into whatever else was passing. Better to wait than to
+ * quietly drop the most objective signal in the audit.
+ */
+const VITALS_TIMEOUT_MS = 38000;
 
 async function fetchVitals(url: string, signal: AbortSignal): Promise<CoreWebVitals | null> {
   const key = process.env.PAGESPEED_API_KEY;
