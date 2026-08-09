@@ -41,7 +41,7 @@ const packages = [
     name: "Starter Site",
     price: "One-Time Fee",
     badge: "One-Time",
-    priceNote: "$999 one-time",
+    priceNote: "$1,000 one-time",
     description:
       "Everything you need to launch a polished, professional website that ranks from day one — no recurring fees. Best suited for businesses that are just getting started online and need a solid foundation without an ongoing commitment.",
     features: [
@@ -375,9 +375,8 @@ export default function Home() {
             </h2>
             <p className="mt-4 max-w-2xl text-[#4f4036]">
               SiteBrew was born from a simple idea: local businesses deserve websites that
-              actually work. We combined two obsessions — clean code and search
-              visibility — to build a studio that serves small businesses across
-              Georgia and South Carolina.
+              actually work. We pair clean code with search visibility to build a studio
+              that serves small businesses across Georgia and South Carolina.
             </p>
             <div className="mt-10 grid gap-6 md:grid-cols-2">
               {/* Carter */}
@@ -393,17 +392,17 @@ export default function Home() {
                   carter@sitebrew.co
                 </a>
               </div>
-              {/* David */}
+              {/* Development team */}
               <div className="flex flex-col rounded-3xl border border-[#1f2e8c]/20 bg-white p-8 shadow-[0_14px_44px_-24px_rgba(31,46,140,0.25)]">
-                <h3 className="text-xl font-semibold text-[#1a130e]">David Bouse</h3>
-                <p className="mt-1 text-xs font-semibold uppercase tracking-widest text-[#1f2e8c]/60">Co-Founder · SEO & Growth</p>
+                <h3 className="text-xl font-semibold text-[#1a130e]">SiteBrew Development Team</h3>
+                <p className="mt-1 text-xs font-semibold uppercase tracking-widest text-[#1f2e8c]/60">Design · Development · Local SEO</p>
                 <p className="mt-4 text-[#4f4036]">
-                  David&apos;s background in SEO and online marketing is what sparked
-                  SiteBrew. He crafts the strategies that get our clients found on
-                  Google — and keeps them climbing the rankings long after launch.
+                  Behind every build is a team handling design, development, and search
+                  strategy together rather than in isolation — so the site that launches
+                  is the same one Google can actually read, rank, and send customers to.
                 </p>
-                <a href="mailto:david@sitebrew.co" className="mt-4 inline-block text-sm font-semibold text-[#1f2e8c] hover:underline">
-                  david@sitebrew.co
+                <a href="mailto:hello@sitebrew.co" className="mt-4 inline-block text-sm font-semibold text-[#1f2e8c] hover:underline">
+                  hello@sitebrew.co
                 </a>
               </div>
             </div>
@@ -612,11 +611,6 @@ export default function Home() {
                   <p className="text-white/40 text-xs uppercase tracking-widest mb-0.5">Carter Wilson — Founder</p>
                   <a href="mailto:carter@sitebrew.co" className="hover:text-white transition block">carter@sitebrew.co</a>
                   <a href="tel:+17703121971" className="hover:text-white transition block">(770) 312-1971</a>
-                </li>
-                <li>
-                  <p className="text-white/40 text-xs uppercase tracking-widest mb-0.5">David Bouse — Co-Founder</p>
-                  <a href="mailto:david@sitebrew.co" className="hover:text-white transition block">david@sitebrew.co</a>
-                  <a href="tel:+16787617848" className="hover:text-white transition block">(678) 761-7848</a>
                 </li>
               </ul>
             </div>

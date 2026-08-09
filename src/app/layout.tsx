@@ -47,7 +47,6 @@ export const metadata: Metadata = {
   ],
   authors: [
     { name: "Carter Wilson", url: "https://sitebrew.co" },
-    { name: "David Bouse", url: "https://sitebrew.co" },
   ],
   creator: "SiteBrew Company",
   publisher: "SiteBrew Company",
@@ -187,7 +186,7 @@ export default function RootLayout({
                         "description": "Mobile-first custom website design with on-page SEO, Google Business Profile setup, and contact forms for local businesses.",
                         "provider": {"@id": "https://sitebrew.co/#business"}
                       },
-                      "price": "999",
+                      "price": "1000",
                       "priceCurrency": "USD",
                       "priceSpecification": {"@type": "UnitPriceSpecification", "priceType": "https://schema.org/OneTimePurchase"}
                     },
@@ -223,19 +222,6 @@ export default function RootLayout({
                 "description": "Carter Wilson is the founder and lead web developer at SiteBrew. He builds fast, mobile-first websites for small businesses across Georgia and South Carolina."
               },
               {
-                "@type": "Person",
-                "@id": "https://sitebrew.co/#david-bouse",
-                "name": "David Bouse",
-                "jobTitle": "Co-Founder, SEO & Growth Strategist",
-                "email": "david@sitebrew.co",
-                "telephone": "+16787617848",
-                "url": "https://sitebrew.co",
-                "sameAs": ["https://www.linkedin.com/company/sitebrewco"],
-                "worksFor": {"@id": "https://sitebrew.co/#business"},
-                "knowsAbout": ["Local SEO", "Search Engine Optimization", "Google Business Profile", "Content Strategy", "Online Marketing", "Georgia Local Search", "South Carolina Local Search"],
-                "description": "David Bouse is the co-founder and SEO strategist at SiteBrew. He crafts the local search strategies that get small businesses across Georgia and South Carolina found on Google and keep them climbing the rankings."
-              },
-              {
                 "@type": "FAQPage",
                 "mainEntity": [
                   {
@@ -261,7 +247,7 @@ export default function RootLayout({
                   {
                     "@type": "Question",
                     "name": "How much does a website cost?",
-                    "acceptedAnswer": {"@type": "Answer", "text": "Our Starter Site is a one-time fee of $999 — a polished, professional website that ranks from day one. Our Growth Plan is $800 upfront plus $125/month for ongoing SEO updates, performance monitoring, and priority support."}
+                    "acceptedAnswer": {"@type": "Answer", "text": "Our Starter Site is a one-time fee of $1,000 — a polished, professional website that ranks from day one. Our Growth Plan is $800 upfront plus $125/month for ongoing SEO updates, performance monitoring, and priority support."}
                   },
                   {
                     "@type": "Question",
@@ -283,7 +269,7 @@ export default function RootLayout({
                 "serviceType": "Web Design",
                 "offers": {
                   "@type": "Offer",
-                  "price": "999",
+                  "price": "1000",
                   "priceCurrency": "USD",
                   "priceSpecification": {"@type": "UnitPriceSpecification", "priceType": "https://schema.org/OneTimePurchase"}
                 }
