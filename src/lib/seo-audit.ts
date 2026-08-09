@@ -119,8 +119,26 @@ const stripTags = (html: string) =>
  * and prefer <main>/<article> when the page marks it up.
  */
 const contentText = (html: string) => {
-  const scoped = html.match(/<(?:main|article)[^>]*>[\s\S]*?<\/(?:main|article)>/i);
-  const source = scoped ? scoped[0] : html;
+  /*
+   * Scope carefully. The previous pattern was a single non-greedy alternation
+   * over main|article, so on the very common <main><article>...</article>
+   * <article>...</article></main> layout it matched from <main> to the FIRST
+   * </article> and threw away the rest — a 2,100-word page measured as 968.
+   * Worse, on shorter pages the truncated count fell under the JS-rendered
+   * threshold, which excluded every DOM check and left the Content category
+   * scored off the single `lang` check.
+   *
+   * There is at most one <main> per document, so match it greedily. Only when
+   * there is no <main> do we fall back to concatenating every <article>.
+   */
+  const main = html.match(/<main[^>]*>([\s\S]*)<\/main>/i);
+  let source: string;
+  if (main) {
+    source = main[1];
+  } else {
+    const articles = html.match(/<article[^>]*>[\s\S]*?<\/article>/gi);
+    source = articles && articles.length ? articles.join(' ') : html;
+  }
   return stripTags(
     source
       .replace(/<nav[\s\S]*?<\/nav>/gi, ' ')
@@ -511,10 +529,19 @@ export function runAudit(input: AuditInput): DetailedAuditResult {
 
   /* — Score — */
   const categories: CategoryResult[] = CATEGORIES.map((cat) => {
-    const own = checks.filter((c) => c.category === cat.key && !c.unassessable);
+    const all = checks.filter((c) => c.category === cat.key);
+    const own = all.filter((c) => !c.unassessable);
     const earned = own.reduce((s, c) => s + (c.passed ? SEVERITY_WEIGHT[c.severity] : 0), 0);
     const possible = own.reduce((s, c) => s + SEVERITY_WEIGHT[c.severity], 0);
-    const assessed = own.length > 0;
+    /*
+     * Require real coverage before reporting a category score. On a JS-rendered
+     * page every content check is unassessable except `lang`, and scoring the
+     * category off that one check handed back Content: 100 — a quarter of the
+     * total weight, earned by declaring a language attribute. Below half
+     * coverage the category reports as not assessed and its weight
+     * redistributes, which is honest rather than invented.
+     */
+    const assessed = own.length > 0 && own.length >= Math.max(2, Math.ceil(all.length / 2));
     const score = assessed && possible ? Math.round((earned / possible) * 100) : 0;
     const failed = own.filter((c) => !c.passed);
     return {
