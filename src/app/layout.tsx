@@ -206,7 +206,7 @@ export default function RootLayout({
                 },
                 "priceRange": "$$",
                 "knowsAbout": ["Web Design", "Local SEO", "Search Engine Optimization", "Google Business Profile", "Mobile-First Development", "Website Maintenance"],
-                "sameAs": ["https://www.linkedin.com/company/sitebrewco", "https://www.instagram.com/sitebrew.company", "https://www.facebook.com/SiteBrewCompany"]
+                "sameAs": ["https://www.linkedin.com/company/sitebrewco", "https://www.instagram.com/sitebrew.company", "https://www.facebook.com/profile.php?id=61593021995110"]
               },
               {
                 "@type": "Person",
@@ -216,7 +216,7 @@ export default function RootLayout({
                 "email": "carter@sitebrew.co",
                 "telephone": "+17703121971",
                 "url": "https://sitebrew.co",
-                "sameAs": ["https://www.linkedin.com/company/sitebrewco", "https://www.instagram.com/sitebrew.company", "https://www.facebook.com/SiteBrewCompany"],
+                "sameAs": ["https://www.linkedin.com/company/sitebrewco", "https://www.instagram.com/sitebrew.company", "https://www.facebook.com/profile.php?id=61593021995110"],
                 "worksFor": {"@id": "https://sitebrew.co/#business"},
                 "knowsAbout": ["Web Design", "Mobile-First Development", "Front-End Engineering", "Website Performance", "Local Business Websites"],
                 "description": "Carter Wilson is the founder and lead web developer at SiteBrew. He builds fast, mobile-first websites for small businesses across Georgia and South Carolina."
