@@ -285,49 +285,6 @@ export default function SeoAuditTool() {
               </p>
             )}
 
-            {/* Per-page breakdown — a strong homepage can hide weak service pages */}
-            {result.pages && result.pages.length > 1 && (
-              <div className="mt-4 rounded-2xl border border-white/20 bg-white/10 p-5 backdrop-blur">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <h3 className="font-semibold text-white">
-                    Pages checked ({result.pagesAudited})
-                  </h3>
-                  {result.weakestPage && (
-                    <span className="text-xs text-white/60">
-                      Weakest: {result.weakestPage.score}/100
-                    </span>
-                  )}
-                </div>
-                <ul className="mt-4 space-y-2">
-                  {result.pages.map((pg) => {
-                    let path = pg.url;
-                    try {
-                      path = new URL(pg.url).pathname || "/";
-                    } catch {
-                      /* keep raw */
-                    }
-                    const st = gradeStyle(pg.grade);
-                    return (
-                      <li
-                        key={pg.url}
-                        className="flex items-center justify-between gap-4 rounded-xl bg-white/10 px-4 py-3"
-                      >
-                        <span className="truncate font-mono text-sm text-white/85">{path}</span>
-                        <span className="flex flex-none items-center gap-3">
-                          <span className="text-xs text-white/60">
-                            {pg.issues} issue{pg.issues === 1 ? "" : "s"}
-                          </span>
-                          <span className={`font-mono text-sm font-bold ${st.text.replace("text-", "text-")}`}>
-                            {pg.score}
-                          </span>
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            )}
-
             {/* Scope caveat — naming the gaps is what makes the CTA credible */}
             <div className="mt-4 rounded-2xl border border-white/15 bg-white/5 px-5 py-4">
               <p className="text-xs leading-relaxed text-white/70">
