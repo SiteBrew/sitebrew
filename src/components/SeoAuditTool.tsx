@@ -98,9 +98,16 @@ export default function SeoAuditTool() {
             disabled={loading || !url.trim()}
             className="rounded-full bg-gradient-to-br from-[#f0b87a] to-[#c8904e] px-8 py-4 font-semibold text-[#1a130e] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading ? "Analysing site…" : "Check My Site"}
+            {loading ? "Analysing…" : "Check My Site"}
           </button>
         </form>
+
+        {loading && (
+          <p className="mt-4 text-sm text-white/60">
+            Fetching your pages and running Google&apos;s speed test — this takes
+            up to 30 seconds.
+          </p>
+        )}
 
         {error && (
           <p role="alert" className="mt-4 rounded-2xl bg-white/10 px-5 py-3 text-sm text-[#ffd9d8]">

@@ -16,6 +16,9 @@ export const maxDuration = 60;
  * Returns null on any failure. The audit degrades gracefully: the performance
  * category is simply reported as not assessed rather than scored as zero.
  */
+/** Give up on PageSpeed after this long and report performance as unassessed. */
+const VITALS_TIMEOUT_MS = 18000;
+
 async function fetchVitals(url: string, signal: AbortSignal): Promise<CoreWebVitals | null> {
   const key = process.env.PAGESPEED_API_KEY;
   const endpoint = new URL("https://www.googleapis.com/pagespeedonline/v5/runPagespeed");
@@ -117,7 +120,7 @@ async function fetchRobots(
 }
 
 /** Max pages to audit, including the entry page. Keeps us inside maxDuration. */
-const MAX_PAGES = 4;
+const MAX_PAGES = 3;
 
 /** Pull candidate URLs from sitemap.xml. */
 async function urlsFromSitemap(origin: string, signal: AbortSignal): Promise<string[]> {
@@ -208,9 +211,17 @@ export async function POST(req: NextRequest) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 45000);
 
-    // Kick off PageSpeed immediately — it's the long pole, so let it run while
-    // we fetch and parse the HTML.
-    const vitalsPromise = fetchVitals(url.toString(), controller.signal);
+    /*
+     * PageSpeed runs a real Lighthouse pass, which routinely takes 20-30s and
+     * occasionally far longer. Racing it against a timeout keeps the whole audit
+     * responsive: if Google is slow we return everything else and mark the
+     * performance category unassessed rather than leaving the visitor staring
+     * at a spinner.
+     */
+    const vitalsPromise = Promise.race([
+      fetchVitals(url.toString(), controller.signal),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), VITALS_TIMEOUT_MS)),
+    ]);
 
     let res: Response;
     try {

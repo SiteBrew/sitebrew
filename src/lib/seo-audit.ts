@@ -125,32 +125,48 @@ const contentText = (html: string) => {
 };
 
 /**
- * Every image reference on the page, including ones a naive <img> scan misses.
+ * One entry per real image on the page.
  *
- * Squarespace, Wix and modern WordPress all lazy-load: the real URL sits in
- * data-src or srcset while the src attribute holds a placeholder, and responsive
- * images are declared with <picture>/<source>. Counting only <img src> both
- * undercounts images and misreads which formats are actually served.
+ * Squarespace, Wix and modern WordPress serve responsive images as
+ * <picture><source ...><source ...><img></picture>. Counting every <source> as
+ * its own image was badly wrong: six photos with empty alt attributes came back
+ * as "12 of 18 images have alt text", and the modern-format check flipped to a
+ * PASS because the <source> variants were WebP even though every real <img>
+ * pointed at a .jpg. A <picture> block is ONE image — alt and dimensions come
+ * from its <img>, and the format is modern if any of its sources is.
  */
-interface ImgInfo { tag: string; hasAlt: boolean; modern: boolean; sized: boolean }
+interface ImgInfo { hasAlt: boolean; modern: boolean; sized: boolean }
+
+const urlAttrs = (tag: string) =>
+  (tag.match(/(?:src|data-src|data-lazy-src|data-original|srcset|data-srcset)=["']([^"']+)["']/gi) || []).join(' ');
+
+const isModern = (frag: string) =>
+  /\.(webp|avif)\b/i.test(urlAttrs(frag)) || /type=["']image\/(webp|avif)["']/i.test(frag);
+
+const describeImg = (imgTag: string, pictureBlock?: string): ImgInfo => ({
+  hasAlt: /alt=["'][^"']+["']/i.test(imgTag),
+  // A WebP <source> genuinely does mean the browser gets WebP, so check the
+  // whole <picture> — but only once, for the single image it represents.
+  modern: isModern(imgTag) || (pictureBlock ? isModern(pictureBlock) : false),
+  sized: /\bwidth=/i.test(imgTag) && /\bheight=/i.test(imgTag),
+});
+
 const collectImages = (html: string): ImgInfo[] => {
-  const tags = [
-    ...(html.match(/<img[^>]*>/gi) || []),
-    ...(html.match(/<source[^>]*>/gi) || []),
-  ];
-  return tags.map((tag) => {
-    // Any attribute that can carry the real asset URL.
-    const urls = [
-      ...(tag.match(/(?:src|data-src|data-lazy-src|data-original|srcset|data-srcset)=["']([^"']+)["']/gi) || []),
-    ].join(' ');
-    return {
-      tag,
-      // <source> has no alt of its own; it inherits from the parent <picture><img>.
-      hasAlt: /<source/i.test(tag) ? true : /alt=["'][^"']+["']/i.test(tag),
-      modern: /\.(webp|avif)\b/i.test(urls) || /type=["']image\/(webp|avif)["']/i.test(tag),
-      sized: /\bwidth=/i.test(tag) && /\bheight=/i.test(tag),
-    };
-  });
+  const out: ImgInfo[] = [];
+
+  const pictures = html.match(/<picture[\s\S]*?<\/picture>/gi) || [];
+  for (const block of pictures) {
+    const img = block.match(/<img[^>]*>/i)?.[0] ?? '';
+    out.push(describeImg(img, block));
+  }
+
+  // Standalone <img> tags — everything not already counted inside a <picture>.
+  const withoutPictures = html.replace(/<picture[\s\S]*?<\/picture>/gi, ' ');
+  for (const img of withoutPictures.match(/<img[^>]*>/gi) || []) {
+    out.push(describeImg(img));
+  }
+
+  return out;
 };
 
 const head = (html: string) => {
