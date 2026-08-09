@@ -47,6 +47,13 @@ export interface CategoryResult {
   total: number;
   issues: number;
   criticalIssues: number;
+  /**
+   * Failures among FATAL_CHECKS only. Kept distinct from criticalIssues:
+   * severity expresses weight, this expresses "unfit for search". Conflating
+   * them capped every site at 45 the moment high-impact on-page checks were
+   * given critical weight.
+   */
+  fatalIssues: number;
   assessed: boolean;
 }
 
@@ -68,6 +75,8 @@ export interface AuditResult {
   overallGrade: string;
   totalIssues: number;
   criticalIssues: number;
+  /** Failures among FATAL_CHECKS. Drives the score cap. */
+  fatalIssues: number;
   categories: CategoryResult[];
   javascriptRendered: boolean;
   /** Present only when PageSpeed Insights returned data. */
@@ -555,6 +564,7 @@ export function runAudit(input: AuditInput): DetailedAuditResult {
       total: own.length,
       issues: failed.length,
       criticalIssues: failed.filter((c) => c.severity === 'critical').length,
+      fatalIssues: failed.filter((c) => FATAL_CHECKS.has(c.id)).length,
     };
   });
 
@@ -592,6 +602,7 @@ export function runAudit(input: AuditInput): DetailedAuditResult {
     overallGrade: toGrade(finalScore),
     totalIssues: allFailed.length,
     criticalIssues: allFailed.filter((c) => c.severity === 'critical').length,
+    fatalIssues: criticalFails.length,
     categories,
     javascriptRendered,
     vitals: vitals ?? undefined,
@@ -661,7 +672,7 @@ export function combineAudits(
     if (per.length === 0) {
       return {
         key: cat.key, label: cat.label, blurb: cat.blurb, score: 0, grade: 'N/A',
-        assessed: false, passed: 0, total: 0, issues: 0, criticalIssues: 0,
+        assessed: false, passed: 0, total: 0, issues: 0, criticalIssues: 0, fatalIssues: 0,
       };
     }
     const avg = Math.round(per.reduce((s, c) => s + c.score, 0) / per.length);
@@ -676,6 +687,7 @@ export function combineAudits(
       total: per.reduce((s, c) => s + c.total, 0),
       issues: per.reduce((s, c) => s + c.issues, 0),
       criticalIssues: per.reduce((s, c) => s + c.criticalIssues, 0),
+      fatalIssues: per.reduce((s, c) => s + c.fatalIssues, 0),
     };
   });
 
@@ -689,13 +701,21 @@ export function combineAudits(
   // A fatal problem on ANY page caps the site. A noindex tag on a service page
   // is just as disqualifying for that page as it would be on the homepage.
   const criticalTotal = categories.reduce((s, c) => s + c.criticalIssues, 0);
+  /*
+   * Cap on FATAL failures only. This previously summed criticalIssues, i.e.
+   * anything with critical *severity*. Once title-length, title-descriptive
+   * and desc-exists were given critical weight — correctly, they matter — the
+   * threshold of 2 was met by almost every site on the internet, and every
+   * audit returned exactly 45. Severity is weight; fatal is fitness.
+   */
+  const fatalTotal = categories.reduce((s, c) => s + c.fatalIssues, 0);
   const anyNoindex = audits.some((a) =>
     a.checks.some((c) => c.id === 'indexable' && !c.passed)
   );
   let cap = 100;
   if (anyNoindex) cap = 35;
-  else if (criticalTotal >= 2) cap = 45;
-  else if (criticalTotal === 1) cap = 65;
+  else if (fatalTotal >= 2) cap = 45;
+  else if (fatalTotal === 1) cap = 65;
   const finalScore = Math.min(rawScore, cap);
 
   const pages: PageAudit[] = audits.map((a, i) => ({
@@ -714,6 +734,7 @@ export function combineAudits(
     overallGrade: toGrade(finalScore),
     totalIssues: audits.reduce((s, a) => s + a.totalIssues, 0),
     criticalIssues: criticalTotal,
+    fatalIssues: fatalTotal,
     categories,
     javascriptRendered: audits.some((a) => a.javascriptRendered),
     vitals: primary.vitals,
