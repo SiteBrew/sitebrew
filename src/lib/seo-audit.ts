@@ -554,7 +554,48 @@ export function runAudit(input: AuditInput): DetailedAuditResult {
     ldBlocks.length > 0 && validSchema, 'warning',
     validSchema ? `Types: ${types.join(', ')}` : 'JSON-LD present but failed to parse.');
 
-  const bizNode = nodes.find((n) => /LocalBusiness|Organization/i.test(String(n['@type'] ?? '')));
+  /*
+   * schema.org has ~100 subtypes of LocalBusiness, and Google asks for the
+   * most specific one that fits. Matching only the literal strings
+   * "LocalBusiness" and "Organization" therefore punished sites for doing it
+   * correctly: a tattoo studio using TattooParlor, or a dentist using Dentist,
+   * failed this check and took schema-address, schema-phone and schema-sameas
+   * down with it — four failures for markup that is more correct than the
+   * generic version that passed.
+   *
+   * The list below covers the common trades; the trailing shape test catches
+   * subtypes not named here, since anything carrying a postal address plus a
+   * phone or opening hours is a business node whatever it calls itself.
+   */
+  const LOCAL_BUSINESS_TYPES = new RegExp(
+    [
+      'LocalBusiness', 'Organization', 'Store', 'Restaurant', 'Dentist',
+      'Physician', 'MedicalBusiness', 'HealthAndBeautyBusiness', 'TattooParlor',
+      'HairSalon', 'BeautySalon', 'NailSalon', 'DaySpa', 'HomeAndConstructionBusiness',
+      'Plumber', 'Electrician', 'RoofingContractor', 'HVACBusiness', 'GeneralContractor',
+      'HousePainter', 'Locksmith', 'MovingCompany', 'AutoRepair', 'AutoDealer',
+      'AutoBodyShop', 'GasStation', 'LegalService', 'Attorney', 'Notary',
+      'AccountingService', 'FinancialService', 'InsuranceAgency', 'RealEstateAgent',
+      'TravelAgency', 'ProfessionalService', 'FoodEstablishment', 'CafeOrCoffeeShop',
+      'BarOrPub', 'Bakery', 'Brewery', 'Winery', 'NightClub', 'ExerciseGym',
+      'SportsActivityLocation', 'HealthClub', 'Veterinary', 'ChildCare',
+      'Florist', 'PetStore', 'HardwareStore', 'FurnitureStore', 'ClothingStore',
+      'GroceryStore', 'LodgingBusiness', 'Hotel', 'SelfStorage', 'EmploymentAgency',
+      'EntertainmentBusiness', 'DryCleaningOrLaundry', 'Emergency', 'Library',
+    ].join('|'),
+    'i'
+  );
+
+  const isBusinessNode = (n: Record<string, unknown>) => {
+    const t = String(n['@type'] ?? '');
+    if (LOCAL_BUSINESS_TYPES.test(t)) return true;
+    // Shape fallback: an addressed node with a phone or hours is a business.
+    return Boolean(
+      n['address'] && (n['telephone'] || n['openingHours'] || n['openingHoursSpecification'])
+    );
+  };
+
+  const bizNode = nodes.find(isBusinessNode);
   add('schema', 'schema-local', 'Business or LocalBusiness markup present', Boolean(bizNode), 'warning',
     bizNode ? `Found: ${types.join(', ')}` : 'No Organization or LocalBusiness markup.');
   // Google ignores business markup that lacks the properties it needs.
