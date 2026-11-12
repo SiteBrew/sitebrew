@@ -240,11 +240,32 @@ const head = (html: string) => {
   return m ? m[0] : html.slice(0, 40000);
 };
 
+/*
+ * Read an attribute value, honouring the quote character that opened it.
+ *
+ * The old pattern was `content=["']([^"']*)["']`, which stops at whichever
+ * quote comes first regardless of which one opened the value. Any description
+ * containing an apostrophe was therefore truncated at it: a correct 164-char
+ * description reading "Explore Breakthrough Tattoo's full range of..." was
+ * measured as the 27 characters before the apostrophe and failed desc-length.
+ * That misreported real pages as broken, so capture to the MATCHING quote.
+ */
 const metaContent = (html: string, attr: 'name' | 'property', value: string) => {
-  const re = new RegExp(`<meta[^>]+${attr}=["']${value}["'][^>]*content=["']([^"']*)["']`, 'i');
-  const alt = new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]*${attr}=["']${value}["']`, 'i');
-  return (html.match(re)?.[1] ?? html.match(alt)?.[1] ?? '').trim();
+  const re = new RegExp(`<meta[^>]+${attr}=["']${value}["'][^>]*?content=(["'])([\\s\\S]*?)\\1`, 'i');
+  const alt = new RegExp(`<meta[^>]+content=(["'])([\\s\\S]*?)\\1[^>]*?${attr}=["']${value}["']`, 'i');
+  const raw = html.match(re)?.[2] ?? html.match(alt)?.[2] ?? '';
+  return decodeEntities(raw).trim();
 };
+
+/** Decode the handful of entities that actually show up in meta values. */
+const decodeEntities = (s: string) =>
+  s
+    .replace(/&(?:#39|#x27|apos);/gi, "'")
+    .replace(/&(?:#34|quot);/gi, '"')
+    .replace(/&(?:#38|amp);/gi, '&')
+    .replace(/&(?:#60|lt);/gi, '<')
+    .replace(/&(?:#62|gt);/gi, '>')
+    .replace(/&(?:#160|nbsp);/gi, ' ');
 
 const tagText = (html: string, tag: string) => {
   const m = html.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'));
@@ -370,7 +391,7 @@ export function runAudit(input: AuditInput): DetailedAuditResult {
     viewport ? 'Set.' : 'No viewport meta tag. Google indexes mobile-first.');
 
   const canonicals = h.match(/<link[^>]+rel=["']canonical["']/gi) || [];
-  const canonical = h.match(/<link[^>]+rel=["']canonical["'][^>]*href=["']([^"']*)["']/i)?.[1];
+  const canonical = h.match(/<link[^>]+rel=["']canonical["'][^>]*?href=(["'])([\s\S]*?)\1/i)?.[2];
   add('technical', 'canonical', 'Exactly one canonical URL', canonicals.length === 1, 'warning',
     canonicals.length === 1 ? 'Set.' :
     canonicals.length === 0 ? 'No canonical tag — risks duplicate-content dilution.'
