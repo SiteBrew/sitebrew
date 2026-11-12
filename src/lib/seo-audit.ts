@@ -516,7 +516,14 @@ export function runAudit(input: AuditInput): DetailedAuditResult {
     imgs.length === 0 || sizedImgs / imgs.length >= 0.8, 'warning',
     imgs.length ? `${sizedImgs} of ${imgs.length} images set dimensions. Missing ones cause layout shift.` : 'No images.', true);
 
-  const internalLinks = (html.match(/<a[^>]+href=["'](\/|https?:\/\/[^"']*)["']/gi) || []).length;
+  /*
+   * The alternation used to be `(\/|https?:\/\/[^"']*)`, whose first branch is a
+   * single slash followed immediately by the closing quote. That matched only
+   * `href="/"` — every real relative link (`/news`, `/#about`) fell through
+   * both branches and went uncounted, so a page with 36 anchors reported 8.
+   * Let the relative branch consume the rest of the path.
+   */
+  const internalLinks = (html.match(/<a[^>]+href=["'](\/[^"']*|https?:\/\/[^"']*)["']/gi) || []).length;
   add('content', 'internal-links', 'At least 10 links for crawl paths', internalLinks >= 10, 'warning',
     `Found roughly ${internalLinks} links.`, true);
 
